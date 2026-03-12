@@ -6,11 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "ai-badcase-app"
 version = "0.1.0"
 description = "Local detector for AI writing bad cases"
-requires-python = ">=3.10"
-dependencies = []
-
-[project.optional-dependencies]
-seekdb = ["pyseekdb"]
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "pyseekdb>=1.1.0.post3",
+]
 
 [project.scripts]
 ai-badcase-detect = "ai_badcase_app.cli:main"
@@ -20,3 +19,8 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

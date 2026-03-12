@@ -1,2 +1,7 @@
 __pycache__/
 .pytest_cache/
+.uv-cache/
+.venv/
+.seekdb/
+src/*.egg-info/
+tmp_seekdb_inspect/

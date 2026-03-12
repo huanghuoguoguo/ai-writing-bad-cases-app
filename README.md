@@ -1,6 +1,6 @@
 # AI Writing Bad Cases App
 
-这个目录是仓库同级的应用层。
+这个目录是应用层仓库。
 
 目标很明确：把仓库内 submodule `ai-writing-bad-cases/data/` 里的 JSON case 库读进来，先做程序级粗检，再把高风险段落交给后续流程处理。
 
@@ -9,7 +9,7 @@
 - Python 数据加载器
 - 基于短语和正则的基础 matcher
 - 段落级风险评分
-- SeekDB 检索接口预留
+- 真正的 `pyseekdb` 嵌入式索引 / 查询代码
 - 命令行入口
 
 ## 设计边界
@@ -23,13 +23,28 @@
 ```bash
 git clone --recurse-submodules <app-repo-url>
 cd ai-writing-bad-cases-app
-PYTHONPATH=src python3 -m ai_badcase_app.cli --input article.txt
+uv sync
+UV_CACHE_DIR=.uv-cache uv run python -m ai_badcase_app.cli --input article.txt
 ```
 
 如果只想看 JSON 输出：
 
 ```bash
-PYTHONPATH=src python3 -m ai_badcase_app.cli --input article.txt --format json
+UV_CACHE_DIR=.uv-cache uv run python -m ai_badcase_app.cli --input article.txt --format json
 ```
 
-如果后续本机装了 `pyseekdb`，可以再继续接 `seekdb_index.py`。
+如果要建立 embedded SeekDB 索引并启用语义召回：
+
+```bash
+UV_CACHE_DIR=.uv-cache uv run python -m ai_badcase_app.cli \
+  --input article.txt \
+  --seekdb \
+  --rebuild-seekdb-index \
+  --seekdb-mode vector
+```
+
+## 说明
+
+- 项目现在使用 `uv` 管理依赖。
+- `pyseekdb` 已经加入正式依赖。
+- 当前这台机器上，`pyseekdb` 的 embedded runtime 实际初始化会报底层错误；CLI 会把这种错误直接抛成清晰提示，不会静默失败。

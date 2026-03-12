@@ -40,8 +40,20 @@ class MatchHit:
 
 
 @dataclass(slots=True)
+class RetrievalHit:
+    case_id: str
+    label: str
+    query_mode: str
+    score: float
+    document: str | None
+    diagnostic_dimensions: list[str]
+    rewrite_hint: str
+
+
+@dataclass(slots=True)
 class ParagraphResult:
     paragraph_index: int
     text: str
     score: float
     hits: list[MatchHit]
+    retrieval_hits: list[RetrievalHit] = field(default_factory=list)

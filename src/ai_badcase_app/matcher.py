@@ -56,6 +56,7 @@ def detect_paragraphs(text: str, cases: list[BadCase]) -> list[ParagraphResult]:
                 text=paragraph,
                 score=score,
                 hits=sorted(hits, key=lambda item: item.confidence, reverse=True),
+                retrieval_hits=[],
             )
         )
     return sorted(results, key=lambda item: item.score, reverse=True)
