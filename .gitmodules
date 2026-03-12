@@ -1,0 +1,3 @@
+[submodule "ai-writing-bad-cases"]
+	path = ai-writing-bad-cases
+	url = https://github.com/huanghuoguoguo/ai-writing-bad-cases.git
