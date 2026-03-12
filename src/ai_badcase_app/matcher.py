@@ -34,9 +34,33 @@ def _match_case(case: BadCase, text: str) -> list[MatchHit]:
                     confidence=confidence,
                     severity=case.severity,
                     rewrite_hint=case.rewrite_hint,
+                    diagnostic_dimensions=case.diagnostic_dimensions,
                 )
             )
     return hits
+
+
+def compute_score(hits: list[MatchHit]) -> float:
+    """Complement-product scoring with dimension diversity bonus.
+
+    base = 1 - (1-c1)(1-c2)...(1-cn)  -- monotonically non-decreasing
+    diversity_bonus = 0.05 * (unique_dimension_count - 1)
+    score = min(1.0, base * (1 + diversity_bonus))
+    """
+    if not hits:
+        return 0.0
+
+    complement = 1.0
+    for hit in hits:
+        complement *= 1.0 - hit.confidence
+    base = 1.0 - complement
+
+    unique_dims: set[str] = set()
+    for hit in hits:
+        unique_dims.update(hit.diagnostic_dimensions)
+    diversity_bonus = 0.05 * max(0, len(unique_dims) - 1)
+
+    return round(min(1.0, base * (1.0 + diversity_bonus)), 4)
 
 
 def detect_paragraphs(text: str, cases: list[BadCase]) -> list[ParagraphResult]:
@@ -49,7 +73,7 @@ def detect_paragraphs(text: str, cases: list[BadCase]) -> list[ParagraphResult]:
         if not hits:
             continue
 
-        score = round(min(1.0, sum(hit.confidence for hit in hits) / len(hits)), 4)
+        score = compute_score(hits)
         results.append(
             ParagraphResult(
                 paragraph_index=index,

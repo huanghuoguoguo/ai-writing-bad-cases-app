@@ -1,0 +1,65 @@
+{
+  "description": "Paragraphs written by humans, should have low or zero scores (negative samples)",
+  "paragraphs": [
+    {
+      "id": "human_arg_01",
+      "text": "去年我换了三份工作，最后一份干了两个月就走了。不是受不了，是发现我根本不想做这行。",
+      "genre": "argumentative"
+    },
+    {
+      "id": "human_arg_02",
+      "text": "这个方法在小团队里特别好用，大公司我没试过，不敢乱说。反正我们五个人的组用了两个月，确实减少了不少无效会议。",
+      "genre": "argumentative"
+    },
+    {
+      "id": "human_arg_03",
+      "text": "我后来发现问题出在我一直在优化流程，但从没问过流程本身是否需要存在。有些事情不是做得不够好，而是不该做。",
+      "genre": "argumentative"
+    },
+    {
+      "id": "human_arg_04",
+      "text": "比起方法，我更在意你是不是每天都在练。练得笨一点没关系，别停就行。",
+      "genre": "argumentative"
+    },
+    {
+      "id": "human_arg_05",
+      "text": "效率不等于速度——做完十件事但只有两件有用，不如做完三件件件到位。这笔账我花了好几个月才算明白。",
+      "genre": "argumentative"
+    },
+    {
+      "id": "human_nar_01",
+      "text": "她低头擦了擦眼睛，说了句谢谢，声音不太稳。我不知道该说什么，就把水杯推过去了。",
+      "genre": "narrative"
+    },
+    {
+      "id": "human_nar_02",
+      "text": "厨房灯坏了一个月了，她摸黑切菜，切到手才想起来这事。创可贴贴上之后又接着切。",
+      "genre": "narrative"
+    },
+    {
+      "id": "human_nar_03",
+      "text": "他说完那句话之后我愣了大概五秒，手里的杯子已经凉了。外面有人在按喇叭，楼下的狗又叫了。",
+      "genre": "narrative"
+    },
+    {
+      "id": "human_nar_04",
+      "text": "后来的事情她没再跟我提过。我也没问。搬家那天帮她搬了几趟箱子，吃了顿饺子，就这样。",
+      "genre": "narrative"
+    },
+    {
+      "id": "human_acd_01",
+      "text": "Zhang et al. (2023) 在1200名被试中发现，该方法的有效率为73%，而对照组仅为41%。差异在p<0.01水平显著。",
+      "genre": "academic"
+    },
+    {
+      "id": "human_acd_02",
+      "text": "我们用问卷收集了数据，然后跑了一个回归分析。样本量偏小是个问题，但至少能看出大致趋势。",
+      "genre": "academic"
+    },
+    {
+      "id": "human_acd_03",
+      "text": "这个结果可能跟我们只采了北方的数据有关，南方是否一样还不清楚。下一步打算在广州和深圳各找一百个样本。",
+      "genre": "academic"
+    }
+  ]
+}

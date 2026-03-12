@@ -1,0 +1,83 @@
+{
+  "description": "Paragraphs known to contain AI-style writing patterns (positive samples)",
+  "paragraphs": [
+    {
+      "id": "ai_arg_01",
+      "text": "在这个信息爆炸的时代，真正重要的不是你获取了多少信息，而是你如何筛选和处理信息。综上所述，我们需要培养一种\u201c底层思维\u201d能力。",
+      "genre": "argumentative",
+      "expected_case_ids": ["zh.arg.era_opening", "zh.arg.not_x_but_y", "zh.arg.conclusion_signals", "zh.arg.truly_important"]
+    },
+    {
+      "id": "ai_arg_02",
+      "text": "不绕弯子，直接说重点。我们可以从三个方面来理解这个问题：首先，效率决定产出；其次，协作决定质量；最后，反馈决定成长。",
+      "genre": "argumentative",
+      "expected_case_ids": ["zh.arg.direct_to_point_opening", "zh.arg.three_part_default"]
+    },
+    {
+      "id": "ai_arg_03",
+      "text": "答案很简单：认知决定上限。本质上，学习的底层逻辑就是不断迭代你的认知框架。换句话说，你需要持续更新自己的思维模式。",
+      "genre": "argumentative",
+      "expected_case_ids": ["zh.arg.colon_expansion", "zh.arg.meta_essence", "zh.arg.paraphrase_meta"]
+    },
+    {
+      "id": "ai_arg_04",
+      "text": "这不仅仅是一个效率问题，更是一种人生态度的选择。无论是个人成长，还是团队协作，都需要这种思维方式。",
+      "genre": "argumentative",
+      "expected_case_ids": ["zh.arg.forced_sublimation", "zh.arg.full_coverage"]
+    },
+    {
+      "id": "ai_arg_05",
+      "text": "你只管把内容写好，剩下的交给算法。这套方法会稳稳接住你，把你的影响力直接拉满。",
+      "genre": "argumentative",
+      "expected_case_ids": ["zh.arg.you_just_do_rest_to", "zh.arg.steadily_catch_you", "zh.arg.max_out_x"]
+    },
+    {
+      "id": "ai_arg_06",
+      "text": "没有废话，没有套路，只有干货。问题是什么？答案就是执行力。真正重要的是你是否愿意开始。",
+      "genre": "argumentative",
+      "expected_case_ids": ["zh.arg.no_x_no_y_only_z", "zh.arg.question_answer_template", "zh.arg.truly_important"]
+    },
+    {
+      "id": "ai_arg_07",
+      "text": "此外，我们还需要注意沟通技巧。与此同时，团队协作也不可忽视。这不仅是一个工具，而且是一种方法论，更是一种思维方式。",
+      "genre": "argumentative",
+      "expected_case_ids": ["zh.arg.connector_chain", "zh.arg.progressive_template"]
+    },
+    {
+      "id": "ai_nar_01",
+      "text": "阳光透过窗帘洒在她的脸上，她嘴角微微上扬。那一刻，时间仿佛凝固了。她的眼里闪烁着光芒，内心深处涌起一阵温暖和感动。",
+      "genre": "narrative",
+      "expected_case_ids": ["zh.nar.warm_light", "zh.nar.lip_corner_smile", "zh.nar.emotion_freeze", "zh.nar.eye_description", "zh.nar.inner_monologue_template", "zh.nar.emotion_flood"]
+    },
+    {
+      "id": "ai_nar_02",
+      "text": "微风轻轻吹过，带来远处花的香气。那一刻她突然意识到，原来自己一直在逃避。她终于学会了放下，带着希望和勇气，踏上了新的旅程。",
+      "genre": "narrative",
+      "expected_case_ids": ["zh.nar.wind_blow", "zh.nar.suddenly_realize", "zh.nar.growth_ending"]
+    },
+    {
+      "id": "ai_nar_03",
+      "text": "\u201c没关系。\u201d她温柔地说，语气充满了理解和包容。他的目光温柔而坚定，脑海里浮现出过去的种种画面。",
+      "genre": "narrative",
+      "expected_case_ids": ["zh.nar.dialogue_emotion_tag", "zh.nar.eye_description", "zh.nar.inner_monologue_template"]
+    },
+    {
+      "id": "ai_acd_01",
+      "text": "近年来，随着人工智能技术的快速发展，该领域引起了广泛关注。然而，现有研究仍存在不足。因此，本文旨在填补这一研究空白。本研究对推动该领域的发展具有重要的理论意义和实践价值。",
+      "genre": "academic",
+      "expected_case_ids": ["zh.acd.abstract_scaffolding", "zh.acd.empty_significance"]
+    },
+    {
+      "id": "ai_acd_02",
+      "text": "大量研究表明，这种方法在实践中具有较高的有效性。该方法被广泛应用于多个领域，受到了学术界的高度关注。值得注意的是，这一现象并非孤立存在。",
+      "genre": "academic",
+      "expected_case_ids": ["zh.acd.vague_hedging", "zh.acd.passive_pile", "zh.acd.filler_transition"]
+    },
+    {
+      "id": "ai_acd_03",
+      "text": "本节将从三个方面对这一问题进行深入分析和探讨。本研究仍存在一定的局限性。未来的研究可以进一步扩大样本量，以提高结论的普适性。",
+      "genre": "academic",
+      "expected_case_ids": ["zh.acd.academic_meta_discourse", "zh.acd.template_conclusion"]
+    }
+  ]
+}

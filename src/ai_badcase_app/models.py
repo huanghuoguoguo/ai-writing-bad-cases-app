@@ -37,6 +37,7 @@ class MatchHit:
     confidence: float
     severity: float
     rewrite_hint: str
+    diagnostic_dimensions: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)

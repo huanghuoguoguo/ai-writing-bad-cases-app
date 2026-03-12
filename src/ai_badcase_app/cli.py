@@ -90,6 +90,8 @@ def _render_text(results) -> str:
             lines.append(
                 f"  - {hit.label} ({hit.matcher_type}, confidence={hit.confidence}) => {hit.matched_text}"
             )
+            if hit.diagnostic_dimensions:
+                lines.append(f"    dimensions: {', '.join(hit.diagnostic_dimensions)}")
             lines.append(f"    rewrite_hint: {hit.rewrite_hint}")
         for hit in result.retrieval_hits:
             lines.append(
