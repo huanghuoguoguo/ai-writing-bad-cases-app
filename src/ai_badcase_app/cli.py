@@ -6,7 +6,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .library import DEFAULT_LIBRARY_ROOT, load_cases
-from .matcher import detect_paragraphs, split_paragraphs
+from .matcher import MatcherConfig, detect_paragraphs, split_paragraphs
 from .models import ParagraphResult
 from .seekdb_index import (
     DEFAULT_COLLECTION,
@@ -78,6 +78,18 @@ def _build_parser() -> argparse.ArgumentParser:
         default="vector",
         help="SeekDB retrieval mode",
     )
+    parser.add_argument(
+        "--fuzzy-threshold",
+        type=int,
+        default=75,
+        help="Fuzzy matching threshold (0-100, default: 75)",
+    )
+    parser.add_argument(
+        "--fuzzy-algorithm",
+        choices=["ratio", "partial_ratio", "token_sort_ratio", "token_set_ratio"],
+        default="ratio",
+        help="Fuzzy matching algorithm (default: ratio)",
+    )
     return parser
 
 
@@ -148,7 +160,13 @@ def main() -> None:
         lang=args.lang,
         genres=args.genres,
     )
-    results = detect_paragraphs(text, cases)
+
+    # 创建 matcher 配置
+    matcher_config = MatcherConfig(
+        fuzzy_threshold=args.fuzzy_threshold,
+        fuzzy_algorithm=args.fuzzy_algorithm,
+    )
+    results = detect_paragraphs(text, cases, config=matcher_config)
 
     if args.rebuild_seekdb_index or args.seekdb:
         try:

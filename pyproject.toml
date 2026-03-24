@@ -8,7 +8,11 @@ version = "0.1.0"
 description = "Local detector for AI writing bad cases"
 requires-python = ">=3.11,<3.14"
 dependencies = [
+    "ddgs>=9.11.4",
+    "duckduckgo-search>=8.1.1",
+    "numpy>=2.4.3",
     "pyseekdb>=1.1.0.post3",
+    "rapidfuzz>=3.14.3",
 ]
 
 [project.scripts]

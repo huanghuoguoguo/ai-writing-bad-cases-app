@@ -5,3 +5,4 @@ __pycache__/
 .seekdb/
 src/*.egg-info/
 tmp_seekdb_inspect/
+data/
