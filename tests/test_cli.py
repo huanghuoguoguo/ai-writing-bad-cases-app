@@ -38,11 +38,23 @@ def test_cli_json_output():
     result = _run_cli("--input", str(path), "--format", "json")
     assert result.returncode == 0
     data = json.loads(result.stdout)
+    assert "document_score" in data
+    assert "paragraphs" in data
+    assert len(data["paragraphs"]) >= 1
+    assert "signals" in data["paragraphs"][0]
+    assert "code" in data["paragraphs"][0]["signals"][0]
+    path.unlink()
+
+
+def test_cli_legacy_json_output():
+    path = _make_input_file("真正重要的不是速度，而是你是否能长期坚持。")
+    result = _run_cli("--input", str(path), "--format", "legacy-json")
+    assert result.returncode == 0
+    data = json.loads(result.stdout)
     assert isinstance(data, list)
     assert len(data) >= 1
     assert "score" in data[0]
     assert "hits" in data[0]
-    assert "diagnostic_dimensions" in data[0]["hits"][0]
     path.unlink()
 
 
@@ -51,8 +63,7 @@ def test_cli_genre_filter():
     result = _run_cli("--input", str(path), "--genre", "narrative", "--format", "json")
     assert result.returncode == 0
     data = json.loads(result.stdout)
-    # steadily_catch_you is cross-genre (argumentative + narrative), so it should still match
-    assert len(data) >= 1
+    assert len(data["paragraphs"]) >= 1
     path.unlink()
 
 

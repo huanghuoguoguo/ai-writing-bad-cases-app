@@ -1,5 +1,5 @@
 from ai_badcase_app.library import load_cases
-from ai_badcase_app.matcher import compute_score, detect_paragraphs, split_paragraphs
+from ai_badcase_app.matcher import detect_paragraphs, split_paragraphs, split_sentences
 from ai_badcase_app.models import MatchHit
 
 
@@ -31,6 +31,18 @@ def test_split_paragraphs_whitespace_between():
     text = "Para one.\n  \n  \nPara two."
     result = split_paragraphs(text)
     assert len(result) == 2
+
+
+def test_split_sentences_chinese_punctuation():
+    text = "第一句。第二句！第三句？"
+    result = split_sentences(text)
+    assert result == ["第一句。", "第二句！", "第三句？"]
+
+
+def test_split_sentences_keeps_markdown_block_intact():
+    text = "```python\nprint('hi')\n```"
+    result = split_sentences(text)
+    assert result == [text]
 
 
 # --- _match_case / MatchHit tests ---
@@ -85,7 +97,6 @@ def test_confidence_calculation():
     assert len(results) == 1
     hit = results[0].hits[0]
     assert hit.case_id == "zh.arg.conclusion_signals"
-    # severity=0.68, weight=1.0, so confidence=0.68
     assert hit.confidence == 0.68
 
 
@@ -103,7 +114,6 @@ def test_detect_paragraphs_ordering():
     text = "综上所述，效率很重要。\n\n稳稳接住你。"
     results = detect_paragraphs(text, cases)
     assert len(results) == 2
-    # Higher score first
     assert results[0].score >= results[1].score
 
 
@@ -115,7 +125,6 @@ def test_detect_paragraphs_no_hits():
 
 
 def test_detects_known_phrase():
-    """Original test, kept for compatibility."""
     cases = load_cases(genres=["argumentative"])
     text = "不绕弯子，直接说重点。\n\n真正重要的不是速度，而是你是否能长期坚持。"
     results = detect_paragraphs(text, cases)
@@ -127,11 +136,42 @@ def test_detects_known_phrase():
 
 
 def test_multiple_matchers_single_case():
-    """A case with multiple matchers can produce multiple hits from the same case."""
     cases = load_cases(genres=["argumentative"])
-    # "不绕弯子" + "开门见山" both match zh.arg.direct_to_point_opening
     text = "不绕弯子，开门见山地说。"
     results = detect_paragraphs(text, cases)
     assert len(results) == 1
     hits_for_case = [h for h in results[0].hits if h.case_id == "zh.arg.direct_to_point_opening"]
     assert len(hits_for_case) >= 2
+
+
+def test_author_fit_wave_opening_detected():
+    cases = load_cases(genres=["argumentative"])
+    text = "在 AI Coding 的浪潮中，我们常常会遭遇代码生成的失控感。"
+    results = detect_paragraphs(text, cases)
+    hit_ids = {hit.case_id for result in results for hit in result.hits}
+    assert "zh.fit.wave_opening" in hit_ids
+
+
+def test_author_fit_future_outlook_detected():
+    cases = load_cases(genres=["argumentative"])
+    text = "未来展望\n\n这项技术带来了无尽的想象空间，其爆发潜力不容小觑。"
+    results = detect_paragraphs(text, cases)
+    hit_ids = {hit.case_id for result in results for hit in result.hits}
+    assert "zh.fit.future_outlook_heading" in hit_ids
+    assert "zh.fit.abstract_future_hype" in hit_ids
+
+
+def test_author_fit_tao_shu_pairing_detected():
+    cases = load_cases(genres=["argumentative"])
+    text = "我们不仅要掌握利用 AI 快速生成代码的“术”，更要坚守工程质量的“道”。"
+    results = detect_paragraphs(text, cases)
+    hit_ids = {hit.case_id for result in results for hit in result.hits}
+    assert "zh.fit.tao_shu_pairing" in hit_ids
+
+
+def test_meta_essence_detects_shuochuanle():
+    cases = load_cases(genres=["argumentative"])
+    text = "说穿了，这件事没有那么神秘。"
+    results = detect_paragraphs(text, cases)
+    hit_ids = {hit.case_id for result in results for hit in result.hits}
+    assert "zh.arg.meta_essence" in hit_ids

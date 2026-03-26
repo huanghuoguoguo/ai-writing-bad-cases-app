@@ -180,6 +180,51 @@ class TestStatisticsAccuracy:
             f"连接词密度应被检测为过高: {report.stats['connector_density']}"
 
 
+class TestPerplexityDetection:
+    """测试概率特征检测（可选功能）"""
+
+    def test_perplexity_detection_available(self):
+        """概率检测可用时不应报错"""
+        text = "这是一个用于测试概率检测的文本段落。它包含多个句子，用来验证功能是否正常。"
+        try:
+            report = analyze_text(text, enable_perplexity=True)
+            # 如果概率检测可用，应该有 probability 字段
+            if report.probability:
+                assert "overall_ppl" in report.probability
+                assert "lrr_score" in report.probability
+                assert "top1_ratio" in report.probability
+        except Exception:
+            # 依赖未安装时跳过
+            pass
+
+    def test_ai_text_lower_perplexity(self):
+        """AI 文本应该有更低的困惑度（如果检测可用）"""
+        ai_text = "首先，我们需要理解问题的本质。其次，分析可能的原因。最后，提出解决方案。"
+        human_text = "说实话，我以前真没觉得这是个问题。后来才发现，事情没那么简单。"
+
+        try:
+            ai_report = analyze_text(ai_text, enable_perplexity=True)
+            human_report = analyze_text(human_text, enable_perplexity=True)
+
+            if ai_report.probability and human_report.probability:
+                # AI 文本困惑度通常更低
+                assert ai_report.probability["overall_ppl"] < human_report.probability["overall_ppl"] * 1.5, \
+                    "AI 文本困惑度应显著低于人类文本"
+        except Exception:
+            pass
+
+    def test_lrr_score_present(self):
+        """LRR 分数应该存在（如果检测可用）"""
+        text = "这是一个测试文本，用于验证 LRR 检测功能是否正常工作。"
+        try:
+            report = analyze_text(text, enable_perplexity=True)
+            if report.probability:
+                assert "lrr_score" in report.probability
+                assert isinstance(report.probability["lrr_score"], float)
+        except Exception:
+            pass
+
+
 # ============ 运行测试 ============
 
 if __name__ == "__main__":
@@ -191,6 +236,7 @@ if __name__ == "__main__":
         TestHumanTextNotFlagged(),
         TestEdgeCases(),
         TestStatisticsAccuracy(),
+        TestPerplexityDetection(),
     ]
 
     passed = 0

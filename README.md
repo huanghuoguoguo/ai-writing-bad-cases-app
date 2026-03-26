@@ -9,6 +9,8 @@
 - Python 数据加载器
 - 基于短语和正则的基础 matcher
 - 段落级风险评分
+- 统计特征分析（句长变异、连接词密度、被动语态等）
+- **困惑度检测（可选）** - 基于 GPT-2 的语言模型概率特征
 - 真正的 `pyseekdb` 嵌入式索引 / 查询代码
 - 命令行入口
 
@@ -51,20 +53,59 @@ UV_CACHE_DIR=.uv-cache uv run python -m ai_badcase_app.cli \
 - `token_sort_ratio` - 忽略词序
 - `token_set_ratio` - 忽略重复词
 
-### 启用语义召回 (SeekDB)
+### 启用困惑度检测 (Perplexity)
 
-如果要建立 embedded SeekDB 索引并启用语义召回：
+基于 GPT-2 语言模型检测文本的可预测性。AI 生成文本通常困惑度更低（更可预测）：
+
+```bash
+# 1. 安装额外依赖（可选功能）
+uv sync --extra perplexity
+
+# 2. Python 代码中启用
+from ai_badcase_app.analyzer import analyze_text
+
+report = analyze_text("你的文本", enable_perplexity=True)
+print(report.perplexity)
+# {
+#   "overall_ppl": 45.2,    # 整体困惑度，越低越像 AI
+#   "min_ppl": 28.5,        # 最低困惑度窗口
+#   "risk_score": 0.65,     # 综合风险分
+#   "risk_level": "medium"
+# }
+```
+
+困惑度检测特点：
+- **轻量**：使用预训练 GPT-2，无需自己训练
+- **敏感**：对流畅度高的 AI 文本敏感
+- **可选**：不安装 transformers 时自动跳过，不影响其他功能
+
+阈值参考：
+- `< 35`：高度可预测，疑似 AI
+- `35-50`：正常范围
+- `> 50`：有更多出人意料的表达，更像人类
+
+### 启用混合检索 (SeekDB)
+
+现在更推荐直接用混合检索。它会把关键词约束和向量召回一起做，再用 RRF 排序：
 
 ```bash
 UV_CACHE_DIR=.uv-cache uv run python -m ai_badcase_app.cli \
   --input article.txt \
   --seekdb \
-  --rebuild-seekdb-index \
+  --rebuild-seekdb-index
+```
+
+如果你只想退回纯向量召回，再显式指定：
+
+```bash
+UV_CACHE_DIR=.uv-cache uv run python -m ai_badcase_app.cli \
+  --input article.txt \
+  --seekdb \
   --seekdb-mode vector
 ```
 
 ## 说明
 
 - 项目现在使用 `uv` 管理依赖。
-- `pyseekdb` 已经加入正式依赖。
-- 当前这台机器上，`pyseekdb` 的 embedded runtime 实际初始化会报底层错误；CLI 会把这种错误直接抛成清晰提示，不会静默失败。
+- `pyseekdb` 已经加入正式依赖，默认走混合检索，也支持纯向量模式。
+- 经过实测，此前版本中存在的底层初始化错误已修复，现在可以正常在当前环境下运行。

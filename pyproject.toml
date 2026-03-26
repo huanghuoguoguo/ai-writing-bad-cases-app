@@ -15,6 +15,12 @@ dependencies = [
     "rapidfuzz>=3.14.3",
 ]
 
+[project.optional-dependencies]
+perplexity = [
+    "transformers>=4.30.0",
+    "torch>=2.0.0",
+]
+
 [project.scripts]
 ai-badcase-detect = "ai_badcase_app.cli:main"
 

@@ -5,8 +5,9 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
+from .analyzer import analyze_text
 from .library import DEFAULT_LIBRARY_ROOT, load_cases
-from .matcher import MatcherConfig, detect_paragraphs, split_paragraphs
+from .matcher import MatcherConfig, detect_paragraphs, split_paragraphs, split_sentences
 from .models import ParagraphResult
 from .seekdb_index import (
     DEFAULT_COLLECTION,
@@ -37,7 +38,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--format",
-        choices=["text", "json"],
+        choices=["text", "json", "legacy-json"],
         default="text",
         help="Output format",
     )
@@ -75,8 +76,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--seekdb-mode",
         choices=["vector", "hybrid"],
-        default="vector",
-        help="SeekDB retrieval mode",
+        default="hybrid",
+        help="SeekDB retrieval mode (default: hybrid)",
     )
     parser.add_argument(
         "--fuzzy-threshold",
@@ -89,6 +90,11 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=["ratio", "partial_ratio", "token_sort_ratio", "token_set_ratio"],
         default="ratio",
         help="Fuzzy matching algorithm (default: ratio)",
+    )
+    parser.add_argument(
+        "--enable-perplexity",
+        action="store_true",
+        help="Enable optional perplexity-based probability signals",
     )
     return parser
 
@@ -149,19 +155,47 @@ def _merge_results(
     return sorted(merged, key=lambda item: item.score, reverse=True)
 
 
-def main() -> None:
-    parser = _build_parser()
-    args = parser.parse_args()
+def _query_retrieval(args, chunk: str):
+    if args.seekdb_mode == "hybrid":
+        return hybrid_search(
+            text=chunk,
+            db_path=Path(args.seekdb_path),
+            database=args.seekdb_database,
+            collection_name=args.seekdb_collection,
+            top_k=args.seekdb_top_k,
+            lang=args.lang,
+            genres=args.genres,
+        )
+    return query_similar(
+        text=chunk,
+        db_path=Path(args.seekdb_path),
+        database=args.seekdb_database,
+        collection_name=args.seekdb_collection,
+        top_k=args.seekdb_top_k,
+        lang=args.lang,
+        genres=args.genres,
+    )
 
-    input_path = Path(args.input)
-    text = input_path.read_text(encoding="utf-8")
+
+def _aggregate_retrieval_hits(args, paragraph: str):
+    merged: dict[str, object] = {}
+    for sentence in split_sentences(paragraph):
+        retrieval_hits = _query_retrieval(args, sentence)
+        for hit in retrieval_hits:
+            existing = merged.get(hit.case_id)
+            if existing is None or hit.score > existing.score:
+                merged[hit.case_id] = hit
+
+    return sorted(merged.values(), key=lambda item: item.score, reverse=True)[: args.seekdb_top_k]
+
+
+def _run_legacy_detection(args, text: str) -> list[ParagraphResult]:
     cases = load_cases(
         library_root=Path(args.library_root),
         lang=args.lang,
         genres=args.genres,
     )
 
-    # 创建 matcher 配置
     matcher_config = MatcherConfig(
         fuzzy_threshold=args.fuzzy_threshold,
         fuzzy_algorithm=args.fuzzy_algorithm,
@@ -184,26 +218,7 @@ def main() -> None:
         paragraphs = split_paragraphs(text)
         for index, paragraph in enumerate(paragraphs):
             try:
-                if args.seekdb_mode == "hybrid":
-                    retrieval_hits = hybrid_search(
-                        text=paragraph,
-                        db_path=Path(args.seekdb_path),
-                        database=args.seekdb_database,
-                        collection_name=args.seekdb_collection,
-                        top_k=args.seekdb_top_k,
-                        lang=args.lang,
-                        genres=args.genres,
-                    )
-                else:
-                    retrieval_hits = query_similar(
-                        text=paragraph,
-                        db_path=Path(args.seekdb_path),
-                        database=args.seekdb_database,
-                        collection_name=args.seekdb_collection,
-                        top_k=args.seekdb_top_k,
-                        lang=args.lang,
-                        genres=args.genres,
-                    )
+                retrieval_hits = _aggregate_retrieval_hits(args, paragraph)
             except (SeekDBUnavailableError, SeekDBRuntimeError) as exc:
                 raise SystemExit(f"SeekDB query failed: {exc}") from exc
 
@@ -212,7 +227,30 @@ def main() -> None:
 
         results = _merge_results(text, results, retrieval_map)
 
+    return results
+
+
+def main() -> None:
+    parser = _build_parser()
+    args = parser.parse_args()
+
+    input_path = Path(args.input)
+    text = input_path.read_text(encoding="utf-8")
+
     if args.format == "json":
+        report = analyze_text(
+            text,
+            library_root=Path(args.library_root),
+            lang=args.lang,
+            genres=args.genres,
+            enable_perplexity=args.enable_perplexity,
+        )
+        print(report.to_json())
+        return
+
+    results = _run_legacy_detection(args, text)
+
+    if args.format == "legacy-json":
         print(json.dumps([asdict(result) for result in results], ensure_ascii=False, indent=2))
         return
 

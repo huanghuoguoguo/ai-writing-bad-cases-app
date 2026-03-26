@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from rapidfuzz import fuzz
 
@@ -11,18 +11,43 @@ from .models import BadCase, MatchHit, ParagraphResult
 @dataclass
 class MatcherConfig:
     """配置 matcher 的行为参数"""
-    # Fuzzy matching
-    fuzzy_threshold: int = 75  # 0-100 的相似度阈值
-    fuzzy_algorithm: str = "ratio"  # ratio, partial_ratio, token_sort_ratio, token_set_ratio
 
-    # Semantic matching (simplified word vector approach)
+    fuzzy_threshold: int = 75
+    fuzzy_algorithm: str = "ratio"
     semantic_threshold: float = 0.7
-    semantic_enabled: bool = False  # 默认关闭，需要词向量文件
+    semantic_enabled: bool = False
     word_vectors_path: str | None = None
 
 
+def _strip_frontmatter(text: str) -> str:
+    if not text.startswith("---\n"):
+        return text
+    parts = text.split("\n---\n", 1)
+    if len(parts) != 2:
+        return text
+    return parts[1]
+
+
 def split_paragraphs(text: str) -> list[str]:
-    return [chunk.strip() for chunk in re.split(r"\n\s*\n", text) if chunk.strip()]
+    body = _strip_frontmatter(text)
+    return [chunk.strip() for chunk in re.split(r"\n\s*\n", body) if chunk.strip()]
+
+
+def split_sentences(text: str) -> list[str]:
+    text = text.strip()
+    if not text:
+        return []
+
+    # Keep markdown/code-heavy blocks intact instead of over-splitting noise.
+    if text.startswith("```") or text.startswith("#") or text.startswith("|"):
+        return [text]
+
+    sentences = [
+        chunk.strip()
+        for chunk in re.findall(r"[^。！？!?；;\n]+[。！？!?；;]?", text)
+        if chunk.strip()
+    ]
+    return sentences or [text]
 
 
 def _match_case(case: BadCase, text: str, config: MatcherConfig | None = None) -> list[MatchHit]:
@@ -40,11 +65,9 @@ def _match_case(case: BadCase, text: str, config: MatcherConfig | None = None) -
             if match:
                 matched_text = match.group(0)
         elif matcher.type == "fuzzy":
-            # 使用 rapidfuzz 进行模糊匹配
             score = _compute_fuzzy_score(matcher.pattern, text, config.fuzzy_algorithm)
             if score >= config.fuzzy_threshold:
                 matched_text = matcher.pattern
-                # 将 0-100 的分数转换为 0-1 的置信度乘数
                 confidence_multiplier = score / 100.0
         else:
             continue
@@ -68,26 +91,19 @@ def _match_case(case: BadCase, text: str, config: MatcherConfig | None = None) -
 
 
 def _compute_fuzzy_score(pattern: str, text: str, algorithm: str = "ratio") -> float:
-    """计算 pattern 和 text 的模糊匹配分数 (0-100)"""
     if algorithm == "ratio":
         return fuzz.ratio(pattern, text)
-    elif algorithm == "partial_ratio":
+    if algorithm == "partial_ratio":
         return fuzz.partial_ratio(pattern, text)
-    elif algorithm == "token_sort_ratio":
+    if algorithm == "token_sort_ratio":
         return fuzz.token_sort_ratio(pattern, text)
-    elif algorithm == "token_set_ratio":
+    if algorithm == "token_set_ratio":
         return fuzz.token_set_ratio(pattern, text)
-    else:
-        return fuzz.ratio(pattern, text)
+    return fuzz.ratio(pattern, text)
 
 
 def compute_score(hits: list[MatchHit]) -> float:
-    """Complement-product scoring with dimension diversity bonus.
-
-    base = 1 - (1-c1)(1-c2)...(1-cn)  -- monotonically non-decreasing
-    diversity_bonus = 0.05 * (unique_dimension_count - 1)
-    score = min(1.0, base * (1 + diversity_bonus))
-    """
+    """Complement-product scoring with dimension diversity bonus."""
     if not hits:
         return 0.0
 

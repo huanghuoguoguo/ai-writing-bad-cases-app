@@ -1,30 +1,37 @@
-from pathlib import Path
-
 from ai_badcase_app.library import load_cases
 
 
 def test_load_cases_argumentative():
     cases = load_cases(genres=["argumentative"])
-    assert len(cases) == 22
+    assert len(cases) >= 22
 
 
 def test_load_cases_narrative():
     cases = load_cases(genres=["narrative"])
-    # 10 dedicated narrative + cross-genre cases (steadily_catch_you, max_out_x)
     assert len(cases) >= 10
 
 
 def test_load_cases_academic():
     cases = load_cases(genres=["academic"])
-    # 8 dedicated academic + cross-genre (conclusion_signals, era_opening, paraphrase_meta, connector_chain)
     assert len(cases) >= 8
+
+
+def test_load_cases_author_fit_cases_loaded_via_genres():
+    arg_cases = load_cases(genres=["argumentative"])
+    academic_cases = load_cases(genres=["academic"])
+
+    arg_ids = {case.id for case in arg_cases}
+    academic_ids = {case.id for case in academic_cases}
+
+    assert "zh.fit.wave_opening" in arg_ids
+    assert "zh.fit.abstract_tool_promise" in arg_ids
+    assert "zh.fit.future_outlook_heading" in academic_ids
 
 
 def test_load_cases_genre_filter():
     all_cases = load_cases()
     arg_cases = load_cases(genres=["argumentative"])
     nar_cases = load_cases(genres=["narrative"])
-    # Filtered results should be subsets
     assert len(arg_cases) <= len(all_cases)
     assert len(nar_cases) <= len(all_cases)
 
@@ -37,7 +44,6 @@ def test_load_cases_cross_genre():
     arg_ids = {c.id for c in arg_cases}
     nar_ids = {c.id for c in nar_cases}
 
-    # steadily_catch_you is tagged both argumentative and narrative
     assert "zh.arg.steadily_catch_you" in arg_ids
     assert "zh.arg.steadily_catch_you" in nar_ids
 

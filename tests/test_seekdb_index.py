@@ -16,3 +16,16 @@ def test_extract_items_from_query_result():
     assert hits[0].label == "Label"
     assert hits[0].score == 0.8
     assert hits[0].diagnostic_dimensions == ["x"]
+
+
+def test_extract_items_keeps_query_mode():
+    raw = {
+        "ids": [["case-1"]],
+        "documents": [["document body"]],
+        "metadatas": [[{"label": "Label", "diagnostic_dimensions": [], "rewrite_hint": "hint"}]],
+        "distances": [[0.2]],
+    }
+
+    hits = _extract_items(raw, query_mode="hybrid")
+
+    assert hits[0].query_mode == "hybrid"
