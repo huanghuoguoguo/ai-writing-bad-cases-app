@@ -58,6 +58,15 @@ def test_cli_legacy_json_output():
     path.unlink()
 
 
+def test_cli_rewrite_output():
+    path = _make_input_file("真正重要的不是速度，而是你是否能长期坚持。")
+    result = _run_cli("--input", str(path), "--rewrite")
+    assert result.returncode == 0
+    assert "不是速度，而是" not in result.stdout
+    assert "更要紧的是你是否能长期坚持" in result.stdout
+    path.unlink()
+
+
 def test_cli_genre_filter():
     path = _make_input_file("稳稳接住你。")
     result = _run_cli("--input", str(path), "--genre", "narrative", "--format", "json")

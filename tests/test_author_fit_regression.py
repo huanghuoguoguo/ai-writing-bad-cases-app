@@ -1,14 +1,19 @@
-from pathlib import Path
-
 from ai_badcase_app.analyzer import analyze_text
 
 
-SAMPLE_POST = Path("/home/yhh/learn/huanghuoguoguo.github.io/_posts/2026-1-16-测试驱动开发与vibe-coding.md")
+SAMPLE_POST = """
+在 AI Coding 的浪潮中，我们常常会遭遇代码生成的失控感。
+
+TDD 能否成为约束和加强 AI Coding 的那根缰绳呢？
+
+## 未来展望
+
+这项技术带来了无尽的想象空间，其爆发潜力不容小觑。
+"""
 
 
 def test_sample_post_hits_author_fit_signals():
-    text = SAMPLE_POST.read_text(encoding="utf-8")
-    report = analyze_text(text)
+    report = analyze_text(SAMPLE_POST)
     signal_codes = {
         signal["code"]
         for segment in report.suspected_segments
@@ -20,6 +25,5 @@ def test_sample_post_hits_author_fit_signals():
 
 
 def test_sample_post_still_requests_retry():
-    text = SAMPLE_POST.read_text(encoding="utf-8")
-    report = analyze_text(text)
+    report = analyze_text(SAMPLE_POST)
     assert report.summary["stop_or_retry"] == "retry"

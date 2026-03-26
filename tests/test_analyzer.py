@@ -27,6 +27,11 @@ AI_TEXT_SAMPLES = {
 真正重要的不是速度，而是你是否能长期坚持。AI 不是替代者，而是合作伙伴。
 关键不在于技术本身，而在于如何使用它。
 """,
+    "marketing_explainer": """
+本文将深入拆解语义指纹技术，揭秘 AI 检测的核心技术。
+这场文本DNA追踪革命让 AI 生成内容无处遁形。
+句长分布特征与困惑度方差模型，正在成为区分人类写作与AI生成的思维心电图。
+""",
 }
 
 # 典型的人类写作（口语化、有"我"的视角、短句、无程式化结构）
@@ -89,6 +94,18 @@ class TestAITextDetection:
         # 验证原因
         reasons = " ".join([r for seg in high_risk for r in seg.reasons])
         assert "不是" in reasons or "对举" in reasons, f"未找对举原因: {reasons}"
+
+    def test_marketing_explainer_detected(self):
+        """揭秘腔和技术神话腔应被检测"""
+        text = AI_TEXT_SAMPLES["marketing_explainer"]
+        report = analyze_text(text)
+        signal_codes = {
+            signal["code"]
+            for seg in report.suspected_segments
+            for signal in seg.signals
+        }
+        assert "zh.arg.reveal_the_secret" in signal_codes
+        assert "zh.arg.tech_myth_hype" in signal_codes
 
 
 class TestHumanTextNotFlagged:
@@ -178,6 +195,28 @@ class TestStatisticsAccuracy:
 
         assert report.stats["connector_density"] > 2.0, \
             f"连接词密度应被检测为过高: {report.stats['connector_density']}"
+
+    def test_low_adjacent_sentence_delta_detected(self):
+        """相邻句跳变太小时应被检测"""
+        text = "这是一个普通测试句子。这是另一条普通测试句子。这又是一条普通测试句子。这还是一条普通测试句子。"
+        report = analyze_text(text)
+        signal_codes = {
+            signal["code"]
+            for seg in report.suspected_segments
+            for signal in seg.signals
+        }
+        assert "low_adjacent_sentence_delta" in signal_codes
+
+    def test_low_extreme_sentence_ratio_detected(self):
+        """缺少长短句交替时应被检测"""
+        text = "这个句子长度差不多。第二句长度也差不多。第三句还是差不多。第四句依旧差不多。第五句仍然差不多。"
+        report = analyze_text(text)
+        signal_codes = {
+            signal["code"]
+            for seg in report.suspected_segments
+            for signal in seg.signals
+        }
+        assert "low_extreme_sentence_ratio" in signal_codes
 
 
 class TestPerplexityDetection:

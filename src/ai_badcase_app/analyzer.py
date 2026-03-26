@@ -308,6 +308,8 @@ def analyze_text(
         suspected_segments=segments,
         stats={
             "sentence_length_cv": full_stats.sentence_length_cv,
+            "adjacent_length_delta_mean": full_stats.adjacent_length_delta_mean,
+            "extreme_sentence_ratio": full_stats.extreme_sentence_ratio,
             "connector_density": full_stats.connector_density,
             "passive_ratio": full_stats.passive_ratio,
             "lexical_diversity": full_stats.lexical_diversity,

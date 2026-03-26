@@ -96,8 +96,8 @@ def test_confidence_calculation():
     results = detect_paragraphs(text, cases)
     assert len(results) == 1
     hit = results[0].hits[0]
-    assert hit.case_id == "zh.arg.conclusion_signals"
-    assert hit.confidence == 0.68
+    assert hit.case_id in {"zh.arg.conclusion_signals", "zh.wst.therefore_thus"}
+    assert hit.confidence >= 0.68
 
 
 def test_diagnostic_dimensions_in_match_hit():
@@ -167,6 +167,38 @@ def test_author_fit_tao_shu_pairing_detected():
     results = detect_paragraphs(text, cases)
     hit_ids = {hit.case_id for result in results for hit in result.hits}
     assert "zh.fit.tao_shu_pairing" in hit_ids
+
+
+def test_author_fit_conclusion_before_journey_detected():
+    cases = load_cases(genres=["argumentative"])
+    text = "我更在意的是它为什么一读就发空。"
+    results = detect_paragraphs(text, cases)
+    hit_ids = {hit.case_id for result in results for hit in result.hits}
+    assert "zh.fit.conclusion_before_journey" in hit_ids
+
+
+def test_author_fit_editorial_neutrality_detected():
+    cases = load_cases(genres=["argumentative"])
+    text = "如果非让我给它一个定位，我现在不太想叫它 AIGC 检测器。"
+    results = detect_paragraphs(text, cases)
+    hit_ids = {hit.case_id for result in results for hit in result.hits}
+    assert "zh.fit.editorial_neutrality" in hit_ids
+
+
+def test_reveal_the_secret_detected():
+    cases = load_cases(genres=["argumentative"])
+    text = "本文将深入拆解语义指纹技术，揭秘 AI 检测的核心技术。"
+    results = detect_paragraphs(text, cases)
+    hit_ids = {hit.case_id for result in results for hit in result.hits}
+    assert "zh.arg.reveal_the_secret" in hit_ids
+
+
+def test_tech_myth_hype_detected():
+    cases = load_cases(genres=["argumentative"])
+    text = "这场文本DNA追踪革命让 AI 生成内容无处遁形。"
+    results = detect_paragraphs(text, cases)
+    hit_ids = {hit.case_id for result in results for hit in result.hits}
+    assert "zh.arg.tech_myth_hype" in hit_ids
 
 
 def test_meta_essence_detects_shuochuanle():

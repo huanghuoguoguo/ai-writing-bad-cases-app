@@ -9,6 +9,7 @@ from .analyzer import analyze_text
 from .library import DEFAULT_LIBRARY_ROOT, load_cases
 from .matcher import MatcherConfig, detect_paragraphs, split_paragraphs, split_sentences
 from .models import ParagraphResult
+from .rewrite import rewrite_text
 from .seekdb_index import (
     DEFAULT_COLLECTION,
     DEFAULT_DATABASE,
@@ -95,6 +96,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--enable-perplexity",
         action="store_true",
         help="Enable optional perplexity-based probability signals",
+    )
+    parser.add_argument(
+        "--rewrite",
+        action="store_true",
+        help="Apply local rewrites for obvious high-risk AIGC phrasing",
     )
     return parser
 
@@ -245,7 +251,21 @@ def main() -> None:
             genres=args.genres,
             enable_perplexity=args.enable_perplexity,
         )
-        print(report.to_json())
+        payload = report.to_dict()
+        if args.rewrite:
+            payload["rewritten_text"] = rewrite_text(text, report)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+
+    if args.rewrite:
+        report = analyze_text(
+            text,
+            library_root=Path(args.library_root),
+            lang=args.lang,
+            genres=args.genres,
+            enable_perplexity=args.enable_perplexity,
+        )
+        print(rewrite_text(text, report))
         return
 
     results = _run_legacy_detection(args, text)

@@ -20,6 +20,8 @@ class TextStatistics:
     sentence_length_mean: float
     sentence_length_std: float  # 标准差，AI 通常更小（更均匀）
     sentence_length_cv: float   # 变异系数 = std/mean
+    adjacent_length_delta_mean: float  # 相邻句长度跳变均值
+    extreme_sentence_ratio: float  # 极长/极短句占比
 
     # 词汇特征
     unique_words: int
@@ -98,8 +100,24 @@ def analyze_text_statistics(text: str) -> TextStatistics:
         variance = sum((x - mean_length) ** 2 for x in sentence_lengths) / len(sentence_lengths)
         std_length = math.sqrt(variance)
         cv = std_length / mean_length if mean_length > 0 else 0
+        adjacent_deltas = [
+            abs(sentence_lengths[i] - sentence_lengths[i - 1])
+            for i in range(1, len(sentence_lengths))
+        ]
+        delta_mean = (
+            sum(adjacent_deltas) / len(adjacent_deltas)
+            if adjacent_deltas else 0
+        )
+        if mean_length > 0:
+            extreme_count = sum(
+                1 for length in sentence_lengths
+                if length <= mean_length * 0.5 or length >= mean_length * 1.5
+            )
+            extreme_ratio = extreme_count / len(sentence_lengths)
+        else:
+            extreme_ratio = 0
     else:
-        mean_length = std_length = cv = 0
+        mean_length = std_length = cv = delta_mean = extreme_ratio = 0
 
     # 词汇多样性
     all_words_text = ' '.join(words)
@@ -127,6 +145,8 @@ def analyze_text_statistics(text: str) -> TextStatistics:
         sentence_length_mean=round(mean_length, 2),
         sentence_length_std=round(std_length, 2),
         sentence_length_cv=round(cv, 4),
+        adjacent_length_delta_mean=round(delta_mean, 4),
+        extreme_sentence_ratio=round(extreme_ratio, 4),
         unique_words=unique_words,
         lexical_diversity=round(lexical_diversity, 4),
         connector_density=round(connector_density, 4),
@@ -147,6 +167,24 @@ def detect_statistical_anomalies(stats: TextStatistics) -> list[dict]:
             "score": round(0.7 - stats.sentence_length_cv, 2),
             "description": f"句长变异系数 {stats.sentence_length_cv}，人类写作通常变化更大",
             "rewrite_hint": "刻意改变句子长度，加入短句打破节奏",
+        })
+
+    if stats.adjacent_length_delta_mean < 8 and stats.sentence_count >= 4:
+        anomalies.append({
+            "type": "low_adjacent_sentence_delta",
+            "label": "相邻句长度跳变太小",
+            "score": round(min(0.75, 0.82 - stats.adjacent_length_delta_mean / 20), 2),
+            "description": f"相邻句平均长度差 {stats.adjacent_length_delta_mean:.2f}，段落起伏偏平",
+            "rewrite_hint": "穿插明显更短或更长的句子，不要让每句都沿着同一节奏往前走",
+        })
+
+    if stats.extreme_sentence_ratio < 0.12 and stats.sentence_count >= 4:
+        anomalies.append({
+            "type": "low_extreme_sentence_ratio",
+            "label": "长短句交替不足",
+            "score": round(min(0.7, 0.5 + (0.12 - stats.extreme_sentence_ratio) * 2), 2),
+            "description": f"极长/极短句占比 {stats.extreme_sentence_ratio:.2f}，段落缺少明显节奏拐点",
+            "rewrite_hint": "补一两句更短的判断句，或者把某一句展开，拉开句长层次",
         })
 
     # 规则 2: 连接词密度过高

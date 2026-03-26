@@ -6,3 +6,4 @@ __pycache__/
 src/*.egg-info/
 tmp_seekdb_inspect/
 data/
+ai-writing-bad-cases

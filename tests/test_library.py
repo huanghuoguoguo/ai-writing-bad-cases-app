@@ -26,6 +26,8 @@ def test_load_cases_author_fit_cases_loaded_via_genres():
     assert "zh.fit.wave_opening" in arg_ids
     assert "zh.fit.abstract_tool_promise" in arg_ids
     assert "zh.fit.future_outlook_heading" in academic_ids
+    assert "zh.fit.conclusion_before_journey" in arg_ids
+    assert "zh.fit.editorial_neutrality" in academic_ids
 
 
 def test_load_cases_genre_filter():
@@ -54,6 +56,7 @@ def test_case_schema_compliance():
         "over_explicitness", "structure_symmetry", "abstract_over_specific",
         "meta_discourse_density", "posture_before_content", "emotional_servicing",
         "connector_driven", "closure_impulse", "average_style",
+        "template_expression", "format_consistency", "writing_hygiene",
     }
     cases = load_cases()
     for case in cases:
