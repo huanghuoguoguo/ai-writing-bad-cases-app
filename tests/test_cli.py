@@ -25,17 +25,17 @@ def _make_input_file(text: str) -> Path:
 
 def test_cli_text_output():
     path = _make_input_file("不绕弯子，直接说重点。\n\n完全普通的一段话。")
-    result = _run_cli("--input", str(path))
+    result = _run_cli("--input", str(path), "--profile", "fast")
     assert result.returncode == 0
     assert "score=" in result.stdout
-    assert "不绕弯子类开场" in result.stdout
-    assert "dimensions:" in result.stdout
+    assert "zh.arg.direct_to_point_opening" in result.stdout
+    assert "review_signal:" in result.stdout
     path.unlink()
 
 
 def test_cli_json_output():
     path = _make_input_file("真正重要的不是速度，而是你是否能长期坚持。")
-    result = _run_cli("--input", str(path), "--format", "json")
+    result = _run_cli("--input", str(path), "--format", "json", "--profile", "fast")
     assert result.returncode == 0
     data = json.loads(result.stdout)
     assert "document_score" in data
@@ -43,12 +43,13 @@ def test_cli_json_output():
     assert len(data["paragraphs"]) >= 1
     assert "signals" in data["paragraphs"][0]
     assert "code" in data["paragraphs"][0]["signals"][0]
+    assert data["runtime"]["profile"] == "fast"
     path.unlink()
 
 
 def test_cli_legacy_json_output():
     path = _make_input_file("真正重要的不是速度，而是你是否能长期坚持。")
-    result = _run_cli("--input", str(path), "--format", "legacy-json")
+    result = _run_cli("--input", str(path), "--format", "legacy-json", "--profile", "fast")
     assert result.returncode == 0
     data = json.loads(result.stdout)
     assert isinstance(data, list)
@@ -60,7 +61,7 @@ def test_cli_legacy_json_output():
 
 def test_cli_rewrite_output():
     path = _make_input_file("真正重要的不是速度，而是你是否能长期坚持。")
-    result = _run_cli("--input", str(path), "--rewrite")
+    result = _run_cli("--input", str(path), "--rewrite", "--profile", "fast")
     assert result.returncode == 0
     assert "不是速度，而是" not in result.stdout
     assert "更要紧的是你是否能长期坚持" in result.stdout
@@ -69,7 +70,7 @@ def test_cli_rewrite_output():
 
 def test_cli_genre_filter():
     path = _make_input_file("稳稳接住你。")
-    result = _run_cli("--input", str(path), "--genre", "narrative", "--format", "json")
+    result = _run_cli("--input", str(path), "--genre", "narrative", "--format", "json", "--profile", "fast")
     assert result.returncode == 0
     data = json.loads(result.stdout)
     assert len(data["paragraphs"]) >= 1

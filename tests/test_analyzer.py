@@ -218,6 +218,73 @@ class TestStatisticsAccuracy:
         }
         assert "low_extreme_sentence_ratio" in signal_codes
 
+    def test_markdown_heading_not_flagged_by_stats(self):
+        text = "## 第一版：本地内存存储"
+        report = analyze_text(text)
+        signal_codes = {
+            signal["code"]
+            for seg in report.suspected_segments
+            for signal in seg.signals
+        }
+        assert "high_connector_density" not in signal_codes
+
+    def test_short_sentence_not_flagged_as_passive(self):
+        text = "为了把这些问题落下来，我写了一个任务管理的 Demo，把这套技术栈走了一遍。"
+        report = analyze_text(text)
+        signal_codes = {
+            signal["code"]
+            for seg in report.suspected_segments
+            for signal in seg.signals
+        }
+        assert "high_passive_ratio" not in signal_codes
+
+    def test_code_fence_chunks_not_flagged_by_stats(self):
+        text = """
+```typescript
+const tasks: Task[] = [];
+
+app.get('/tasks', (req, res) => {
+  res.json(tasks);
+});
+```
+"""
+        report = analyze_text(text)
+        signal_codes = {
+            signal["code"]
+            for seg in report.suspected_segments
+            for signal in seg.signals
+        }
+        assert "low_sentence_variation" not in signal_codes
+
+
+class TestReviewSignalMapping:
+    def test_generic_ai_signal_does_not_lower_author_fit(self):
+        report = analyze_text("真正重要的不是速度，而是你是否能长期坚持。")
+        payload = report.to_dict()
+        assert payload["document_score"]["overall_risk"] > 0
+        assert payload["document_score"]["author_fit"] == 1.0
+
+    def test_argument_signal_has_review_mapping(self):
+        report = analyze_text("真正重要的不是速度，而是你是否能长期坚持。")
+        review_signals = {
+            signal["review_signal"]
+            for seg in report.suspected_segments
+            for signal in seg.signals
+        }
+        assert "cliche_phrase" in review_signals
+
+    def test_author_fit_signal_has_author_fit_mapping(self):
+        report = analyze_text("## 未来展望\n\n这项技术带来了无尽的想象空间，其爆发潜力不容小觑。")
+        collected = [
+            signal
+            for seg in report.suspected_segments
+            for signal in seg.signals
+            if signal["code"] == "zh.fit.future_outlook_heading"
+        ]
+        assert collected
+        assert "author_fit_low" in collected[0]["review_signals"]
+        assert "forced_summary" in collected[0]["review_signals"]
+
 
 class TestPerplexityDetection:
     """测试概率特征检测（可选功能）"""

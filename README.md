@@ -29,6 +29,30 @@ uv sync
 UV_CACHE_DIR=.uv-cache uv run python -m ai_badcase_app.cli --input article.txt
 ```
 
+默认会走 `review` profile：
+
+- `rule`
+- `author-fit`
+- `markdown-aware stats`
+- `seekdb`
+
+如果你只想要更快的本地粗检，可以显式切到：
+
+```bash
+UV_CACHE_DIR=.uv-cache uv run python -m ai_badcase_app.cli \
+  --input article.txt \
+  --profile fast
+```
+
+如果要把概率特征也带上：
+
+```bash
+UV_CACHE_DIR=.uv-cache uv run python -m ai_badcase_app.cli \
+  --input article.txt \
+  --profile deep \
+  --format json
+```
+
 如果只想看 JSON 输出：
 
 ```bash

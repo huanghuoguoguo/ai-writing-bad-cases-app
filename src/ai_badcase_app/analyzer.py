@@ -45,14 +45,17 @@ class TextAnalysisReport:
             key=lambda x: x.risk_score,
             reverse=True,
         )
-        overall_risk = 0.0
-        if self.suspected_segments:
-            overall_risk = round(
-                sum(segment.risk_score for segment in self.suspected_segments)
-                / max(self.total_paragraphs, 1),
-                4,
-            )
-        author_fit = round(max(0.0, 1.0 - overall_risk), 4)
+        overall_risk = _average_segment_score(
+            sorted_segments,
+            lambda signal: True,
+            self.total_paragraphs,
+        )
+        author_fit_risk = _average_segment_score(
+            sorted_segments,
+            _is_author_fit_signal,
+            self.total_paragraphs,
+        )
+        author_fit = round(max(0.0, 1.0 - author_fit_risk), 4)
 
         paragraphs = [
             {
@@ -72,6 +75,7 @@ class TextAnalysisReport:
         result = {
             "document_score": {
                 "overall_risk": overall_risk,
+                "author_fit_risk": author_fit_risk,
                 "author_fit": author_fit,
                 "confidence": round(0.6 if self.suspected_segments else 0.3, 4),
             },
@@ -103,6 +107,33 @@ def _risk_level(score: float) -> str:
     return "low"
 
 
+def _average_segment_score(
+    segments: list[SuspectedSegment],
+    predicate,
+    total_paragraphs: int,
+) -> float:
+    if not segments:
+        return 0.0
+
+    total = 0.0
+    for segment in segments:
+        matching_scores = [
+            float(signal.get("score", 0.0))
+            for signal in segment.signals
+            if predicate(signal)
+        ]
+        if matching_scores:
+            total += max(matching_scores)
+
+    if total <= 0:
+        return 0.0
+    return round(total / max(total_paragraphs, 1), 4)
+
+
+def _is_author_fit_signal(signal: dict) -> bool:
+    return str(signal.get("code", "")).startswith("zh.fit.")
+
+
 def _strip_frontmatter_with_offset(text: str) -> tuple[str, int]:
     if not text.startswith("---\n"):
         return text, 0
@@ -128,6 +159,104 @@ def _find_paragraph_index(paragraph_spans: list[tuple[int, int]], pos: int) -> i
             return index
     if paragraph_spans and pos >= paragraph_spans[-1][0]:
         return len(paragraph_spans) - 1
+    return None
+
+
+def _is_heading(paragraph: str) -> bool:
+    return paragraph.lstrip().startswith("#")
+
+
+def _is_code_block(paragraph: str) -> bool:
+    stripped = paragraph.strip()
+    return stripped.startswith("```") or stripped.endswith("```")
+
+
+def _is_table_block(paragraph: str) -> bool:
+    lines = [line.strip() for line in paragraph.splitlines() if line.strip()]
+    return bool(lines) and all(line.startswith("|") for line in lines)
+
+
+def _is_list_block(paragraph: str) -> bool:
+    lines = [line.strip() for line in paragraph.splitlines() if line.strip()]
+    if not lines:
+        return False
+    return all(re.match(r"^([-*+] |\d+\. )", line) for line in lines)
+
+
+def _plain_text_len(text: str) -> int:
+    return len(re.sub(r"\s+", "", text))
+
+
+def _should_run_stat_checks(paragraph: str) -> bool:
+    if _is_heading(paragraph) or _is_code_block(paragraph) or _is_table_block(paragraph) or _is_list_block(paragraph):
+        return False
+
+    if _plain_text_len(paragraph) < 40:
+        return False
+
+    sentence_like_parts = [
+        chunk for chunk in re.split(r"[。！？!?\n]+", paragraph) if chunk.strip()
+    ]
+    return len(sentence_like_parts) >= 2
+
+
+def _code_fence_indices(paragraphs: list[str]) -> set[int]:
+    indices: set[int] = set()
+    in_code_fence = False
+
+    for index, paragraph in enumerate(paragraphs):
+        fence_count = paragraph.count("```")
+        if in_code_fence or fence_count:
+            indices.add(index)
+        if fence_count % 2 == 1:
+            in_code_fence = not in_code_fence
+
+    return indices
+
+
+def _normalize_review_signals(code: str, source: str) -> list[str]:
+    if code in {
+        "low_sentence_variation",
+        "low_adjacent_sentence_delta",
+        "low_extreme_sentence_ratio",
+    }:
+        return ["uniform_sentence_length"]
+
+    if code in {
+        "zh.fit.future_outlook_heading",
+        "zh.fit.abstract_future_hype",
+        "zh.fit.over_smooth_closure",
+    }:
+        return ["author_fit_low", "forced_summary"]
+
+    if code == "zh.fit.conclusion_before_journey":
+        return ["author_fit_low", "perfect_ladder"]
+
+    if code.startswith("zh.fit."):
+        return ["author_fit_low"]
+
+    if source == "rule":
+        return ["cliche_phrase"]
+
+    if code in {"high_connector_density", "high_passive_ratio", "low_lexical_diversity"}:
+        return ["cliche_phrase"]
+
+    return []
+
+
+def _primary_review_signal(review_signals: list[str]) -> str | None:
+    priority = [
+        "need_interview",
+        "missing_evidence",
+        "author_fit_low",
+        "forced_summary",
+        "perfect_ladder",
+        "uniform_sentence_length",
+        "cliche_phrase",
+    ]
+    for item in priority:
+        if item in review_signals:
+            return item
     return None
 
 
@@ -166,8 +295,13 @@ def analyze_text(
 
     paragraphs = split_paragraphs(text)
     paragraph_spans = _paragraph_spans(body_text)
+    code_fence_paragraphs = _code_fence_indices(paragraphs)
     stat_anomalies_by_paragraph: dict[int, list[dict]] = {}
     for index, paragraph in enumerate(paragraphs):
+        if index in code_fence_paragraphs:
+            continue
+        if not _should_run_stat_checks(paragraph):
+            continue
         p_stats = analyze_text_statistics(paragraph)
         p_anomalies = detect_statistical_anomalies(p_stats)
         if p_anomalies:
@@ -196,12 +330,17 @@ def analyze_text(
                 signals.append(
                     {
                         "code": hit.case_id,
+                        "score": hit.confidence,
                         "severity": _risk_level(rule_result.score),
                         "evidence": hit.matched_text,
                         "reason": hit.label,
                         "rewrite_hint": hit.rewrite_hint,
                         "source": "rule",
                         "diagnostic_dimensions": hit.diagnostic_dimensions,
+                        "review_signals": _normalize_review_signals(hit.case_id, "rule"),
+                        "review_signal": _primary_review_signal(
+                            _normalize_review_signals(hit.case_id, "rule")
+                        ),
                     }
                 )
 
@@ -214,12 +353,17 @@ def analyze_text(
                 signals.append(
                     {
                         "code": anomaly["type"],
+                        "score": anomaly.get("score", stat_score),
                         "severity": _risk_level(stat_score),
                         "evidence": anomaly["label"],
                         "reason": anomaly["description"],
                         "rewrite_hint": anomaly["rewrite_hint"],
                         "source": "stat",
                         "diagnostic_dimensions": [],
+                        "review_signals": _normalize_review_signals(anomaly["type"], "stat"),
+                        "review_signal": _primary_review_signal(
+                            _normalize_review_signals(anomaly["type"], "stat")
+                        ),
                     }
                 )
 
@@ -255,12 +399,15 @@ def analyze_text(
                 signals=[
                     {
                         "code": "probability_signal",
+                        "score": probability_result.risk_score,
                         "severity": probability_result.risk_level,
                         "evidence": first_window.text[:120],
                         "reason": reason,
                         "rewrite_hint": "; ".join(probability_result.suggestions),
                         "source": "probability",
                         "diagnostic_dimensions": ["perplexity", "lrr"],
+                        "review_signals": [],
+                        "review_signal": None,
                     }
                     for reason in probability_result.reasons
                 ],
@@ -274,12 +421,19 @@ def analyze_text(
         for segment in sorted(segments, key=lambda item: item.risk_score, reverse=True)[:3]
         for signal in segment.signals[:1]
     ]
+    top_review_signals = [
+        signal["review_signal"]
+        for segment in sorted(segments, key=lambda item: item.risk_score, reverse=True)
+        for signal in segment.signals
+        if signal.get("review_signal")
+    ]
     summary = {
         "total_segments_checked": len(paragraphs),
         "suspected_segments_count": len(segments),
         "high_risk_count": high_risk_count,
         "medium_risk_count": medium_risk_count,
         "top_issues": top_issues,
+        "top_review_signals": list(dict.fromkeys(top_review_signals))[:5],
         "stop_or_retry": "retry" if high_risk_count or medium_risk_count else "accept",
         "note": "这些只是疑似片段，需要调用方进一步判断是否真的是 AI 生成",
     }

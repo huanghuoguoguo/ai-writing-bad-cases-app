@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 import math
 from dataclasses import dataclass
-from collections import Counter
 
 
 @dataclass
@@ -48,7 +47,17 @@ _CONNECTORS = [
 ]
 
 # 被动语态标记
-_PASSIVE_MARKERS = ["被", "由", "为", "受到", "得到", "加以"]
+#
+# 这里故意不用单字 “为” / “由”：
+# - “为了”“认为”“因为” 这类常见写法会被大量误判
+# - 技术博客里 “由此可见” 更像连接词，不是被动句
+_PASSIVE_PATTERNS = [
+    r"被",
+    r"受到",
+    r"得到",
+    r"加以",
+    r"由[^，。！？!?]{0,12}(完成|实现|触发|构成|导致|决定)",
+]
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -76,9 +85,8 @@ def _count_connectors(text: str) -> int:
 def _count_passive_markers(text: str) -> int:
     """统计被动语态标记"""
     count = 0
-    for marker in _PASSIVE_MARKERS:
-        # 避免重复计数，简单统计
-        count += len(re.findall(rf'{marker}', text))
+    for pattern in _PASSIVE_PATTERNS:
+        count += len(re.findall(pattern, text))
     return count
 
 
