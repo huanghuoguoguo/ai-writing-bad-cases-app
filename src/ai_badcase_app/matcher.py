@@ -6,6 +6,10 @@ from dataclasses import dataclass
 from rapidfuzz import fuzz
 
 from .models import BadCase, MatchHit, ParagraphResult
+from .text_utils import split_paragraphs, split_sentences  # re-exported for backwards compatibility
+
+# Re-export for backwards compatibility with tests
+__all__ = ["MatcherConfig", "detect_paragraphs", "compute_score", "split_paragraphs", "split_sentences"]
 
 
 @dataclass
@@ -17,37 +21,6 @@ class MatcherConfig:
     semantic_threshold: float = 0.7
     semantic_enabled: bool = False
     word_vectors_path: str | None = None
-
-
-def _strip_frontmatter(text: str) -> str:
-    if not text.startswith("---\n"):
-        return text
-    parts = text.split("\n---\n", 1)
-    if len(parts) != 2:
-        return text
-    return parts[1]
-
-
-def split_paragraphs(text: str) -> list[str]:
-    body = _strip_frontmatter(text)
-    return [chunk.strip() for chunk in re.split(r"\n\s*\n", body) if chunk.strip()]
-
-
-def split_sentences(text: str) -> list[str]:
-    text = text.strip()
-    if not text:
-        return []
-
-    # Keep markdown/code-heavy blocks intact instead of over-splitting noise.
-    if text.startswith("```") or text.startswith("#") or text.startswith("|"):
-        return [text]
-
-    sentences = [
-        chunk.strip()
-        for chunk in re.findall(r"[^。！？!?；;\n]+[。！？!?；;]?", text)
-        if chunk.strip()
-    ]
-    return sentences or [text]
 
 
 def _match_case(case: BadCase, text: str, config: MatcherConfig | None = None) -> list[MatchHit]:

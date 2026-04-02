@@ -3,14 +3,14 @@ from __future__ import annotations
 import re
 
 from .analyzer import TextAnalysisReport, analyze_text
-from .matcher import split_paragraphs
+from .text_utils import split_frontmatter, split_paragraphs
 
 
 def rewrite_text(text: str, report: TextAnalysisReport | None = None) -> str:
     """Apply lightweight local rewrites for obvious AI-style patterns."""
     report = report or analyze_text(text)
-    frontmatter, body = _split_frontmatter(text)
-    paragraphs = split_paragraphs(text)
+    frontmatter, body = split_frontmatter(text)
+    paragraphs = split_paragraphs(body)
     signal_map = _build_signal_map(report)
 
     rewritten = [
@@ -19,15 +19,6 @@ def rewrite_text(text: str, report: TextAnalysisReport | None = None) -> str:
     ]
     rebuilt_body = "\n\n".join(rewritten)
     return f"{frontmatter}{rebuilt_body}" if frontmatter else rebuilt_body
-
-
-def _split_frontmatter(text: str) -> tuple[str, str]:
-    if not text.startswith("---\n"):
-        return "", text
-    parts = text.split("\n---\n", 1)
-    if len(parts) != 2:
-        return "", text
-    return parts[0] + "\n---\n", parts[1]
 
 
 def _build_signal_map(report: TextAnalysisReport) -> dict[int, set[str]]:
