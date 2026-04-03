@@ -1,6 +1,7 @@
 from ai_badcase_app.library import load_cases
-from ai_badcase_app.matcher import detect_paragraphs, split_paragraphs, split_sentences
+from ai_badcase_app.matcher import detect_paragraphs
 from ai_badcase_app.models import MatchHit
+from ai_badcase_app.text_utils import split_paragraphs, split_sentences
 
 
 # --- split_paragraphs tests ---

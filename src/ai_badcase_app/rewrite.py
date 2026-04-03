@@ -2,13 +2,23 @@ from __future__ import annotations
 
 import re
 
-from .analyzer import TextAnalysisReport, analyze_text
+from .models import TextAnalysisReport
 from .text_utils import split_frontmatter, split_paragraphs
 
 
-def rewrite_text(text: str, report: TextAnalysisReport | None = None) -> str:
-    """Apply lightweight local rewrites for obvious AI-style patterns."""
-    report = report or analyze_text(text)
+def rewrite_text(text: str, report: TextAnalysisReport) -> str:
+    """
+    Apply lightweight local rewrites for obvious AI-style patterns.
+
+    Args:
+        text: 原始文本
+        report: 必须传入已有的分析报告，避免重复分析。
+            调用方应先调用 analyze_text() 获取报告，再传入此处。
+
+    Example:
+        report = analyze_text(text)
+        rewritten = rewrite_text(text, report)
+    """
     frontmatter, body = split_frontmatter(text)
     paragraphs = split_paragraphs(body)
     signal_map = _build_signal_map(report)
@@ -27,7 +37,7 @@ def _build_signal_map(report: TextAnalysisReport) -> dict[int, set[str]]:
         if segment.paragraph_index is None:
             continue
         signal_map.setdefault(segment.paragraph_index, set()).update(
-            signal["code"] for signal in segment.signals
+            signal.code for signal in segment.signals
         )
     return signal_map
 

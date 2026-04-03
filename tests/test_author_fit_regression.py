@@ -15,7 +15,7 @@ TDD 能否成为约束和加强 AI Coding 的那根缰绳呢？
 def test_sample_post_hits_author_fit_signals():
     report = analyze_text(SAMPLE_POST)
     signal_codes = {
-        signal["code"]
+        signal.code
         for segment in report.suspected_segments
         for signal in segment.signals
     }

@@ -1,137 +1,13 @@
 from __future__ import annotations
 
-import json
 import re
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .models import BadCase
 
-
-@dataclass
-class SuspectedSegment:
-    """疑似 AI 生成的文本片段"""
-
-    paragraph_index: int | None
-    text: str
-    risk_score: float  # 0-1
-    risk_level: str  # "high" | "medium" | "low"
-    reasons: list[str]  # 为什么怀疑是 AI
-    suggestions: list[str]  # 改写建议
-    start_pos: int | None = None  # 在原文中的位置
-    end_pos: int | None = None
-    detection_method: str = "rule"  # 检测方法：rule | stat | probability
-    signals: list[dict] = field(default_factory=list)
-
-
-@dataclass
-class TextAnalysisReport:
-    """文本分析报告 - 供调用方（AI/Agent）参考"""
-
-    total_chars: int
-    total_sentences: int
-    total_paragraphs: int
-    suspected_segments: list[SuspectedSegment] = field(default_factory=list)
-    stats: dict = field(default_factory=dict)
-    probability: dict | None = None
-    summary: dict = field(default_factory=dict)
-
-    def to_dict(self) -> dict:
-        """序列化为字典，方便 JSON 输出"""
-        sorted_segments = sorted(
-            self.suspected_segments,
-            key=lambda x: x.risk_score,
-            reverse=True,
-        )
-        overall_risk = _average_segment_score(
-            sorted_segments,
-            lambda signal: True,
-            self.total_paragraphs,
-        )
-        author_fit_risk = _average_segment_score(
-            sorted_segments,
-            _is_author_fit_signal,
-            self.total_paragraphs,
-        )
-        author_fit = round(max(0.0, 1.0 - author_fit_risk), 4)
-
-        paragraphs = [
-            {
-                "paragraph_index": s.paragraph_index,
-                "text": s.text[:200] + "..." if len(s.text) > 200 else s.text,
-                "text_excerpt": s.text[:120] + "..." if len(s.text) > 120 else s.text,
-                "risk_score": s.risk_score,
-                "risk_level": s.risk_level,
-                "reasons": s.reasons,
-                "rewrite_hints": s.suggestions,
-                "detection_method": s.detection_method,
-                "signals": s.signals,
-            }
-            for s in sorted_segments
-        ]
-
-        result = {
-            "document_score": {
-                "overall_risk": overall_risk,
-                "author_fit_risk": author_fit_risk,
-                "author_fit": author_fit,
-                "confidence": round(0.6 if self.suspected_segments else 0.3, 4),
-            },
-            "basic_info": {
-                "total_chars": self.total_chars,
-                "total_sentences": self.total_sentences,
-                "total_paragraphs": self.total_paragraphs,
-            },
-            "paragraphs": paragraphs,
-            "statistics": self.stats,
-            "summary": self.summary,
-        }
-        if self.probability:
-            result["probability"] = self.probability
-
-        # Compatibility field for older callers.
-        result["suspected_segments"] = paragraphs
-        return result
-
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
-
-
-def _risk_level(score: float) -> str:
-    if score >= 0.8:
-        return "high"
-    if score >= 0.6:
-        return "medium"
-    return "low"
-
-
-def _average_segment_score(
-    segments: list[SuspectedSegment],
-    predicate,
-    total_paragraphs: int,
-) -> float:
-    if not segments:
-        return 0.0
-
-    total = 0.0
-    for segment in segments:
-        matching_scores = [
-            float(signal.get("score", 0.0))
-            for signal in segment.signals
-            if predicate(signal)
-        ]
-        if matching_scores:
-            total += max(matching_scores)
-
-    if total <= 0:
-        return 0.0
-    return round(total / max(total_paragraphs, 1), 4)
-
-
-def _is_author_fit_signal(signal: dict) -> bool:
-    return str(signal.get("code", "")).startswith("zh.fit.")
+from .models import Signal, SuspectedSegment, TextAnalysisReport, risk_level
 
 
 def _normalize_review_signals(code: str, source: str) -> list[str]:
@@ -224,7 +100,7 @@ def analyze_text(
     p_spans = paragraph_spans(body_text)
     code_fence_paragraphs = code_fence_indices(paragraphs)
 
-    stat_anomalies_by_paragraph: dict[int, list[dict]] = {}
+    stat_anomalies_by_paragraph: dict[int, list] = {}
     for index, paragraph in enumerate(paragraphs):
         if index in code_fence_paragraphs:
             continue
@@ -244,7 +120,7 @@ def analyze_text(
         rule_result = rule_map.get(index)
         anomalies = stat_anomalies_by_paragraph.get(index, [])
 
-        signals: list[dict] = []
+        signals: list[Signal] = []
         reasons: list[str] = []
         suggestions: list[str] = []
         risk_candidates: list[float] = []
@@ -256,48 +132,44 @@ def analyze_text(
                 if hit.rewrite_hint:
                     suggestions.append(hit.rewrite_hint)
                 review_signals = _normalize_review_signals(hit.case_id, "rule")
-                signals.append(
-                    {
-                        "code": hit.case_id,
-                        "score": hit.confidence,
-                        "severity": _risk_level(rule_result.score),
-                        "evidence": hit.matched_text,
-                        "reason": hit.label,
-                        "rewrite_hint": hit.rewrite_hint,
-                        "source": "rule",
-                        "diagnostic_dimensions": hit.diagnostic_dimensions,
-                        "review_signals": review_signals,
-                        "review_signal": _primary_review_signal(review_signals),
-                    }
-                )
+                signals.append(Signal(
+                    code=hit.case_id,
+                    score=hit.confidence,
+                    severity=risk_level(rule_result.score),
+                    evidence=hit.matched_text,
+                    reason=hit.label,
+                    rewrite_hint=hit.rewrite_hint,
+                    source="rule",
+                    diagnostic_dimensions=hit.diagnostic_dimensions,
+                    review_signals=review_signals,
+                    review_signal=_primary_review_signal(review_signals),
+                ))
 
         if anomalies:
-            stat_score = min(0.7, sum(a.get("score", 0.3) for a in anomalies) / len(anomalies))
+            stat_score = min(0.7, sum(a.score for a in anomalies) / len(anomalies))
             risk_candidates.append(stat_score)
             for anomaly in anomalies:
-                reasons.append(anomaly["description"])
-                suggestions.append(anomaly["rewrite_hint"])
-                review_signals = _normalize_review_signals(anomaly["type"], "stat")
-                signals.append(
-                    {
-                        "code": anomaly["type"],
-                        "score": anomaly.get("score", stat_score),
-                        "severity": _risk_level(stat_score),
-                        "evidence": anomaly["label"],
-                        "reason": anomaly["description"],
-                        "rewrite_hint": anomaly.get("rewrite_hint", ""),
-                        "source": "stat",
-                        "diagnostic_dimensions": anomaly.get("diagnostic_dimensions", []),
-                        "review_signals": review_signals,
-                        "review_signal": _primary_review_signal(review_signals),
-                    }
-                )
+                reasons.append(anomaly.description)
+                suggestions.append(anomaly.rewrite_hint)
+                review_signals = _normalize_review_signals(anomaly.type, "stat")
+                signals.append(Signal(
+                    code=anomaly.type,
+                    score=anomaly.score,
+                    severity=risk_level(stat_score),
+                    evidence=anomaly.label,
+                    reason=anomaly.description,
+                    rewrite_hint=anomaly.rewrite_hint,
+                    source="stat",
+                    diagnostic_dimensions=anomaly.diagnostic_dimensions,
+                    review_signals=review_signals,
+                    review_signal=_primary_review_signal(review_signals),
+                ))
 
         if not risk_candidates:
             continue
 
         risk_score = round(max(risk_candidates), 4)
-        level = _risk_level(risk_score)
+        level = risk_level(risk_score)
         segments.append(
             SuspectedSegment(
                 paragraph_index=index,
@@ -325,18 +197,16 @@ def analyze_text(
                 suggestions=probability_result.suggestions,
                 detection_method="probability",
                 signals=[
-                    {
-                        "code": "probability_signal",
-                        "score": probability_result.risk_score,
-                        "severity": probability_result.risk_level,
-                        "evidence": first_window.text[:120],
-                        "reason": reason,
-                        "rewrite_hint": "; ".join(probability_result.suggestions),
-                        "source": "probability",
-                        "diagnostic_dimensions": ["perplexity", "lrr"],
-                        "review_signals": [],
-                        "review_signal": None,
-                    }
+                    Signal(
+                        code="probability_signal",
+                        score=probability_result.risk_score,
+                        severity=probability_result.risk_level,
+                        evidence=first_window.text[:120],
+                        reason=reason,
+                        rewrite_hint="; ".join(probability_result.suggestions),
+                        source="probability",
+                        diagnostic_dimensions=["perplexity", "lrr"],
+                    )
                     for reason in probability_result.reasons
                 ],
             )
@@ -346,15 +216,15 @@ def analyze_text(
     high_risk_count = sum(1 for s in segments if s.risk_level == "high")
     medium_risk_count = sum(1 for s in segments if s.risk_level == "medium")
     top_issues = [
-        signal["code"]
+        signal.code
         for segment in sorted(segments, key=lambda item: item.risk_score, reverse=True)[:3]
         for signal in segment.signals[:1]
     ]
     top_review_signals = [
-        signal["review_signal"]
+        signal.review_signal
         for segment in sorted(segments, key=lambda item: item.risk_score, reverse=True)
         for signal in segment.signals
-        if signal.get("review_signal")
+        if signal.review_signal
     ]
     summary = {
         "total_segments_checked": len(paragraphs),

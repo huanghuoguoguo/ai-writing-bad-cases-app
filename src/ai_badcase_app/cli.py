@@ -10,7 +10,7 @@ from pathlib import Path
 from .analyzer import analyze_text
 from .library import DEFAULT_LIBRARY_ROOT, load_cases
 from .matcher import MatcherConfig, detect_paragraphs
-from .models import ParagraphResult
+from .models import BadCase, ParagraphResult, RetrievalHit, risk_level
 from .rewrite import rewrite_text
 from .seekdb_index import (
     DEFAULT_COLLECTION,
@@ -23,14 +23,6 @@ from .seekdb_index import (
     query_similar,
 )
 from .text_utils import split_paragraphs, split_sentences
-
-
-def _risk_level(score: float) -> str:
-    if score >= 0.8:
-        return "high"
-    if score >= 0.6:
-        return "medium"
-    return "low"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -163,6 +155,66 @@ def _perplexity_requested(args) -> bool:
     return args.enable_perplexity or args.profile == "deep"
 
 
+def _load_and_index_cases(args) -> list[BadCase]:
+    """加载 bad case 库并建立 SeekDB 索引"""
+    cases = load_cases(
+        library_root=Path(args.library_root),
+        lang=args.lang,
+        genres=args.genres,
+    )
+    index_cases(
+        cases=cases,
+        db_path=Path(args.seekdb_path),
+        database=args.seekdb_database,
+        collection_name=args.seekdb_collection,
+    )
+    return cases
+
+
+def _make_query_fn(args):
+    """根据 seekdb_mode 构造查询函数"""
+    def query_retrieval(chunk: str) -> list[RetrievalHit]:
+        if args.seekdb_mode == "hybrid":
+            return hybrid_search(
+                text=chunk,
+                db_path=Path(args.seekdb_path),
+                database=args.seekdb_database,
+                collection_name=args.seekdb_collection,
+                top_k=args.seekdb_top_k,
+                lang=args.lang,
+                genres=args.genres,
+            )
+        return query_similar(
+            text=chunk,
+            db_path=Path(args.seekdb_path),
+            database=args.seekdb_database,
+            collection_name=args.seekdb_collection,
+            top_k=args.seekdb_top_k,
+            lang=args.lang,
+            genres=args.genres,
+        )
+    return query_retrieval
+
+
+def _query_paragraphs_seekdb(args, paragraphs: list[str]) -> dict[int, list[RetrievalHit]]:
+    """对每个段落按句检索 SeekDB，合并去重后返回 {段落索引: [RetrievalHit]}"""
+    query_fn = _make_query_fn(args)
+    retrieval_map: dict[int, list[RetrievalHit]] = {}
+
+    for index, paragraph in enumerate(paragraphs):
+        merged: dict[str, RetrievalHit] = {}
+        for sentence in split_sentences(paragraph):
+            for hit in query_fn(sentence):
+                existing = merged.get(hit.case_id)
+                if existing is None or hit.score > existing.score:
+                    merged[hit.case_id] = hit
+        hits = sorted(merged.values(), key=lambda item: item.score, reverse=True)[: args.seekdb_top_k]
+        if hits:
+            retrieval_map[index] = hits
+
+    return retrieval_map
+
+
 def _attach_retrieval_hits(payload: dict, text: str, retrieval_map: dict[int, list]) -> dict:
     """将检索结果附加到 payload"""
     if not retrieval_map:
@@ -196,7 +248,7 @@ def _attach_retrieval_hits(payload: dict, text: str, retrieval_map: dict[int, li
                 "text": paragraph[:200] + "..." if len(paragraph) > 200 else paragraph,
                 "text_excerpt": paragraph[:120] + "..." if len(paragraph) > 120 else paragraph,
                 "risk_score": serialized_hits[0]["score"],
-                "risk_level": _risk_level(serialized_hits[0]["score"]),
+                "risk_level": risk_level(serialized_hits[0]["score"]),
                 "reasons": [],
                 "rewrite_hints": [],
                 "detection_method": "seekdb",
@@ -216,65 +268,19 @@ def _collect_retrieval_map(args, text: str, strict: bool) -> tuple[dict[int, lis
     if not _seekdb_requested(args):
         return {}, None
 
-    cases = load_cases(
-        library_root=Path(args.library_root),
-        lang=args.lang,
-        genres=args.genres,
-    )
-
     try:
-        index_cases(
-            cases=cases,
-            db_path=Path(args.seekdb_path),
-            database=args.seekdb_database,
-            collection_name=args.seekdb_collection,
-        )
+        _load_and_index_cases(args)
     except (SeekDBUnavailableError, SeekDBRuntimeError) as exc:
         if strict:
             raise SystemExit(f"SeekDB index build failed: {exc}") from exc
         return {}, {"name": "seekdb", "reason": str(exc)}
 
-    def query_retrieval(chunk: str):
-        if args.seekdb_mode == "hybrid":
-            return hybrid_search(
-                text=chunk,
-                db_path=Path(args.seekdb_path),
-                database=args.seekdb_database,
-                collection_name=args.seekdb_collection,
-                top_k=args.seekdb_top_k,
-                lang=args.lang,
-                genres=args.genres,
-            )
-        return query_similar(
-            text=chunk,
-            db_path=Path(args.seekdb_path),
-            database=args.seekdb_database,
-            collection_name=args.seekdb_collection,
-            top_k=args.seekdb_top_k,
-            lang=args.lang,
-            genres=args.genres,
-        )
-
-    retrieval_map = {}
-    paragraphs = split_paragraphs(text)
-    for index, paragraph in enumerate(paragraphs):
-        try:
-            # 对每个句子检索，然后合并
-            merged: dict[str, object] = {}
-            for sentence in split_sentences(paragraph):
-                retrieval_hits = query_retrieval(sentence)
-                for hit in retrieval_hits:
-                    existing = merged.get(hit.case_id)
-                    if existing is None or hit.score > existing.score:
-                        merged[hit.case_id] = hit
-            hits = sorted(merged.values(), key=lambda item: item.score, reverse=True)[: args.seekdb_top_k]
-        except (SeekDBUnavailableError, SeekDBRuntimeError) as exc:
-            if strict:
-                raise SystemExit(f"SeekDB query failed: {exc}") from exc
-            return {}, {"name": "seekdb", "reason": str(exc)}
-
-        if hits:
-            retrieval_map[index] = hits
+    try:
+        retrieval_map = _query_paragraphs_seekdb(args, split_paragraphs(text))
+    except (SeekDBUnavailableError, SeekDBRuntimeError) as exc:
+        if strict:
+            raise SystemExit(f"SeekDB query failed: {exc}") from exc
+        return {}, {"name": "seekdb", "reason": str(exc)}
 
     return retrieval_map, None
 
@@ -348,46 +354,12 @@ def _run_legacy_detection(args, text: str) -> list[ParagraphResult]:
             raise SystemExit(f"SeekDB index build failed: {exc}") from exc
 
     if _seekdb_requested(args):
-        # 简化的检索合并逻辑
-        retrieval_map = {}
         paragraphs = split_paragraphs(text)
 
-        def query_retrieval(chunk: str):
-            if args.seekdb_mode == "hybrid":
-                return hybrid_search(
-                    text=chunk,
-                    db_path=Path(args.seekdb_path),
-                    database=args.seekdb_database,
-                    collection_name=args.seekdb_collection,
-                    top_k=args.seekdb_top_k,
-                    lang=args.lang,
-                    genres=args.genres,
-                )
-            return query_similar(
-                text=chunk,
-                db_path=Path(args.seekdb_path),
-                database=args.seekdb_database,
-                collection_name=args.seekdb_collection,
-                top_k=args.seekdb_top_k,
-                lang=args.lang,
-                genres=args.genres,
-            )
-
-        for index, paragraph in enumerate(paragraphs):
-            try:
-                merged: dict[str, object] = {}
-                for sentence in split_sentences(paragraph):
-                    retrieval_hits = query_retrieval(sentence)
-                    for hit in retrieval_hits:
-                        existing = merged.get(hit.case_id)
-                        if existing is None or hit.score > existing.score:
-                            merged[hit.case_id] = hit
-                hits = sorted(merged.values(), key=lambda item: item.score, reverse=True)[: args.seekdb_top_k]
-            except (SeekDBUnavailableError, SeekDBRuntimeError) as exc:
-                raise SystemExit(f"SeekDB query failed: {exc}") from exc
-
-            if hits:
-                retrieval_map[index] = hits
+        try:
+            retrieval_map = _query_paragraphs_seekdb(args, paragraphs)
+        except (SeekDBUnavailableError, SeekDBRuntimeError) as exc:
+            raise SystemExit(f"SeekDB query failed: {exc}") from exc
 
         # 合并结果
         rule_map = {result.paragraph_index: result for result in results}

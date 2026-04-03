@@ -23,6 +23,9 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
+from .models import risk_level as _risk_level
+
+
 @dataclass
 class ProbabilityResult:
     """概率特征分析结果"""
@@ -353,14 +356,9 @@ class ProbabilityDetector:
             risk_score = 0.0
 
         # 确定等级
-        if risk_score >= 0.7:
-            risk_level = "high"
-        elif risk_score >= 0.4:
-            risk_level = "medium"
-        else:
-            risk_level = "low"
+        level = _risk_level(risk_score)
 
-        return risk_score, risk_level, reasons, suggestions
+        return risk_score, level, reasons, suggestions
 
     def _create_windows(self, text: str, window_size: int, stride: int) -> list:
         """创建滑动窗口"""
@@ -453,3 +451,8 @@ def analyze_probability(text: str) -> ProbabilityResult | None:
         return detector.analyze(text)
     except (ProbabilityUnavailableError, ProbabilityRuntimeError):
         return None
+
+
+def analyze_perplexity(text: str) -> ProbabilityResult | None:
+    """向后兼容旧接口名称。"""
+    return analyze_probability(text)

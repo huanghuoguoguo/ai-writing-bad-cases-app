@@ -6,10 +6,7 @@ from dataclasses import dataclass
 from rapidfuzz import fuzz
 
 from .models import BadCase, MatchHit, ParagraphResult
-from .text_utils import split_paragraphs, split_sentences  # re-exported for backwards compatibility
-
-# Re-export for backwards compatibility with tests
-__all__ = ["MatcherConfig", "detect_paragraphs", "compute_score", "split_paragraphs", "split_sentences"]
+from .text_utils import split_paragraphs
 
 
 @dataclass

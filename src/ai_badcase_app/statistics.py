@@ -4,6 +4,9 @@ import re
 import math
 from dataclasses import dataclass
 
+from .models import Anomaly
+from .text_utils import split_sentences_for_stats
+
 
 @dataclass
 class TextStatistics:
@@ -86,12 +89,6 @@ _DASH_EXPLAIN_PATTERNS = [
 ]
 
 
-def _split_sentences(text: str) -> list[str]:
-    """分句，基于标点"""
-    sentences = re.split(r'[。！？!?.\n]+', text)
-    return [s.strip() for s in sentences if s.strip()]
-
-
 def _extract_words(text: str) -> list[str]:
     """简单分词，基于连续中文字符"""
     words = re.findall(r'[\u4e00-\u9fff]+', text)
@@ -133,7 +130,7 @@ def _detect_uniform_sentence_groups(sentence_lengths: list[int], tolerance: int 
 def analyze_text_statistics(text: str) -> TextStatistics:
     """分析文本的统计特征"""
     paragraphs = [p for p in re.split(r'\n\s*\n', text) if p.strip()]
-    sentences = _split_sentences(text)
+    sentences = split_sentences_for_stats(text)
     words = _extract_words(text)
 
     char_count = len(text)
@@ -219,116 +216,116 @@ def analyze_text_statistics(text: str) -> TextStatistics:
     )
 
 
-def detect_statistical_anomalies(stats: TextStatistics) -> list[dict]:
+def detect_statistical_anomalies(stats: TextStatistics) -> list[Anomaly]:
     """基于统计特征检测异常，返回风险项列表"""
-    anomalies = []
+    anomalies: list[Anomaly] = []
 
     # 规则 1: 句长变异系数过低（AI 句子长度更均匀）
     if stats.sentence_length_cv < 0.3 and stats.sentence_count >= 3:
-        anomalies.append({
-            "type": "low_sentence_variation",
-            "label": "句子长度过于均匀",
-            "score": round(0.7 - stats.sentence_length_cv, 2),
-            "description": f"句长变异系数 {stats.sentence_length_cv}，人类写作通常变化更大",
-            "rewrite_hint": "刻意改变句子长度，加入短句打破节奏",
-            "diagnostic_dimensions": ["rhythm", "authenticity"],
-        })
+        anomalies.append(Anomaly(
+            type="low_sentence_variation",
+            label="句子长度过于均匀",
+            score=round(0.7 - stats.sentence_length_cv, 2),
+            description=f"句长变异系数 {stats.sentence_length_cv}，人类写作通常变化更大",
+            rewrite_hint="刻意改变句子长度，加入短句打破节奏",
+            diagnostic_dimensions=["rhythm", "authenticity"],
+        ))
 
     if stats.adjacent_length_delta_mean < 8 and stats.sentence_count >= 4:
-        anomalies.append({
-            "type": "low_adjacent_sentence_delta",
-            "label": "相邻句长度跳变太小",
-            "score": round(min(0.75, 0.82 - stats.adjacent_length_delta_mean / 20), 2),
-            "description": f"相邻句平均长度差 {stats.adjacent_length_delta_mean:.2f}，段落起伏偏平",
-            "rewrite_hint": "穿插明显更短或更长的句子，不要让每句都沿着同一节奏往前走",
-            "diagnostic_dimensions": ["rhythm", "authenticity"],
-        })
+        anomalies.append(Anomaly(
+            type="low_adjacent_sentence_delta",
+            label="相邻句长度跳变太小",
+            score=round(min(0.75, 0.82 - stats.adjacent_length_delta_mean / 20), 2),
+            description=f"相邻句平均长度差 {stats.adjacent_length_delta_mean:.2f}，段落起伏偏平",
+            rewrite_hint="穿插明显更短或更长的句子，不要让每句都沿着同一节奏往前走",
+            diagnostic_dimensions=["rhythm", "authenticity"],
+        ))
 
     if stats.extreme_sentence_ratio < 0.12 and stats.sentence_count >= 4:
-        anomalies.append({
-            "type": "low_extreme_sentence_ratio",
-            "label": "长短句交替不足",
-            "score": round(min(0.7, 0.5 + (0.12 - stats.extreme_sentence_ratio) * 2), 2),
-            "description": f"极长/极短句占比 {stats.extreme_sentence_ratio:.2f}，段落缺少明显节奏拐点",
-            "rewrite_hint": "补一两句更短的判断句，或者把某一句展开，拉开句长层次",
-            "diagnostic_dimensions": ["rhythm", "authenticity"],
-        })
+        anomalies.append(Anomaly(
+            type="low_extreme_sentence_ratio",
+            label="长短句交替不足",
+            score=round(min(0.7, 0.5 + (0.12 - stats.extreme_sentence_ratio) * 2), 2),
+            description=f"极长/极短句占比 {stats.extreme_sentence_ratio:.2f}，段落缺少明显节奏拐点",
+            rewrite_hint="补一两句更短的判断句，或者把某一句展开，拉开句长层次",
+            diagnostic_dimensions=["rhythm", "authenticity"],
+        ))
 
     # 规则 1.1: 均匀句长组检测
     if stats.uniform_sentence_group_count >= 1 and stats.sentence_count >= 5:
-        anomalies.append({
-            "type": "uniform_sentence_groups",
-            "label": "存在均匀句长段落",
-            "score": round(min(0.85, 0.6 + stats.uniform_sentence_group_count * 0.15), 2),
-            "description": f"发现 {stats.uniform_sentence_group_count} 处连续句子长度相近",
-            "rewrite_hint": "打断均匀节奏：缩短、拉长、或拆成两句",
-            "diagnostic_dimensions": ["rhythm", "authenticity"],
-        })
+        anomalies.append(Anomaly(
+            type="uniform_sentence_groups",
+            label="存在均匀句长段落",
+            score=round(min(0.85, 0.6 + stats.uniform_sentence_group_count * 0.15), 2),
+            description=f"发现 {stats.uniform_sentence_group_count} 处连续句子长度相近",
+            rewrite_hint="打断均匀节奏：缩短、拉长、或拆成两句",
+            diagnostic_dimensions=["rhythm", "authenticity"],
+        ))
 
     # 规则 2: 连接词密度过高
     if stats.connector_density > 2.0:
-        anomalies.append({
-            "type": "high_connector_density",
-            "label": "连接词密度过高",
-            "score": min(0.9, stats.connector_density / 3),
-            "description": f"每100字出现 {stats.connector_density:.2f} 个连接词",
-            "rewrite_hint": "删除逻辑连接词，用上下文自然衔接",
-            "diagnostic_dimensions": ["connector_driven", "over_explicitness"],
-        })
+        anomalies.append(Anomaly(
+            type="high_connector_density",
+            label="连接词密度过高",
+            score=min(0.9, stats.connector_density / 3),
+            description=f"每100字出现 {stats.connector_density:.2f} 个连接词",
+            rewrite_hint="删除逻辑连接词，用上下文自然衔接",
+            diagnostic_dimensions=["connector_driven", "over_explicitness"],
+        ))
 
     # 规则 3: 被动语态比例过高
     if stats.passive_ratio > 0.5:
-        anomalies.append({
-            "type": "high_passive_ratio",
-            "label": "被动语态过多",
-            "score": min(0.8, stats.passive_ratio),
-            "description": f"平均每句 {stats.passive_ratio:.2f} 个被动标记",
-            "rewrite_hint": "改为主动语态，明确主语",
-            "diagnostic_dimensions": ["average_style", "meta_discourse_density"],
-        })
+        anomalies.append(Anomaly(
+            type="high_passive_ratio",
+            label="被动语态过多",
+            score=min(0.8, stats.passive_ratio),
+            description=f"平均每句 {stats.passive_ratio:.2f} 个被动标记",
+            rewrite_hint="改为主动语态，明确主语",
+            diagnostic_dimensions=["average_style", "meta_discourse_density"],
+        ))
 
     # 规则 4: 词汇多样性过低（AI 容易重复用词）
     if stats.lexical_diversity < 0.4 and stats.word_count > 50:
-        anomalies.append({
-            "type": "low_lexical_diversity",
-            "label": "词汇重复度高",
-            "score": round(0.8 - stats.lexical_diversity, 2),
-            "description": f"词汇多样性 {stats.lexical_diversity}，存在重复用词",
-            "rewrite_hint": "使用同义词替换，避免重复",
-            "diagnostic_dimensions": ["average_style", "refinement"],
-        })
+        anomalies.append(Anomaly(
+            type="low_lexical_diversity",
+            label="词汇重复度高",
+            score=round(0.8 - stats.lexical_diversity, 2),
+            description=f"词汇多样性 {stats.lexical_diversity}，存在重复用词",
+            rewrite_hint="使用同义词替换，避免重复",
+            diagnostic_dimensions=["average_style", "refinement"],
+        ))
 
     # 规则 5: 破折号密度过高
     if stats.dash_density > 0.3 and stats.sentence_count >= 3:
-        anomalies.append({
-            "type": "high_dash_density",
-            "label": "破折号使用过多",
-            "score": round(min(0.78, 0.5 + stats.dash_density * 0.3), 2),
-            "description": f"平均每句 {stats.dash_density:.2f} 个破折号，可能存在过度解释",
-            "rewrite_hint": "删除破折号后的解释，相信读者能理解",
-            "diagnostic_dimensions": ["trust", "meta_discourse_density"],
-        })
+        anomalies.append(Anomaly(
+            type="high_dash_density",
+            label="破折号使用过多",
+            score=round(min(0.78, 0.5 + stats.dash_density * 0.3), 2),
+            description=f"平均每句 {stats.dash_density:.2f} 个破折号，可能存在过度解释",
+            rewrite_hint="删除破折号后的解释，相信读者能理解",
+            diagnostic_dimensions=["trust", "meta_discourse_density"],
+        ))
 
     # 规则 6: 三段式列举检测
     if stats.three_part_enumeration_count >= 1:
-        anomalies.append({
-            "type": "three_part_enumeration",
-            "label": "三段式列举",
-            "score": round(min(0.82, 0.7 + stats.three_part_enumeration_count * 0.1), 2),
-            "description": f"发现 {stats.three_part_enumeration_count} 处三段式列举结构",
-            "rewrite_hint": "改成两项或四项，或去掉编号直接列举",
-            "diagnostic_dimensions": ["structure_symmetry", "average_style"],
-        })
+        anomalies.append(Anomaly(
+            type="three_part_enumeration",
+            label="三段式列举",
+            score=round(min(0.82, 0.7 + stats.three_part_enumeration_count * 0.1), 2),
+            description=f"发现 {stats.three_part_enumeration_count} 处三段式列举结构",
+            rewrite_hint="改成两项或四项，或去掉编号直接列举",
+            diagnostic_dimensions=["structure_symmetry", "average_style"],
+        ))
 
     # 规则 7: 元话语污染检测
     if stats.meta_discourse_count >= 1:
-        anomalies.append({
-            "type": "meta_discourse_pollution",
-            "label": "元话语污染",
-            "score": round(min(0.9, 0.8 + stats.meta_discourse_count * 0.05), 2),
-            "description": f"发现 {stats.meta_discourse_count} 处元话语标记",
-            "rewrite_hint": "删除元话语标记，只保留正文内容",
-            "diagnostic_dimensions": ["pure_output", "meta_discourse_density"],
-        })
+        anomalies.append(Anomaly(
+            type="meta_discourse_pollution",
+            label="元话语污染",
+            score=round(min(0.9, 0.8 + stats.meta_discourse_count * 0.05), 2),
+            description=f"发现 {stats.meta_discourse_count} 处元话语标记",
+            rewrite_hint="删除元话语标记，只保留正文内容",
+            diagnostic_dimensions=["pure_output", "meta_discourse_density"],
+        ))
 
     return anomalies

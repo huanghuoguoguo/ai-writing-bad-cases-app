@@ -100,7 +100,7 @@ class TestAITextDetection:
         text = AI_TEXT_SAMPLES["marketing_explainer"]
         report = analyze_text(text)
         signal_codes = {
-            signal["code"]
+            signal.code
             for seg in report.suspected_segments
             for signal in seg.signals
         }
@@ -201,7 +201,7 @@ class TestStatisticsAccuracy:
         text = "这是一个普通测试句子。这是另一条普通测试句子。这又是一条普通测试句子。这还是一条普通测试句子。"
         report = analyze_text(text)
         signal_codes = {
-            signal["code"]
+            signal.code
             for seg in report.suspected_segments
             for signal in seg.signals
         }
@@ -212,7 +212,7 @@ class TestStatisticsAccuracy:
         text = "这个句子长度差不多。第二句长度也差不多。第三句还是差不多。第四句依旧差不多。第五句仍然差不多。"
         report = analyze_text(text)
         signal_codes = {
-            signal["code"]
+            signal.code
             for seg in report.suspected_segments
             for signal in seg.signals
         }
@@ -222,7 +222,7 @@ class TestStatisticsAccuracy:
         text = "## 第一版：本地内存存储"
         report = analyze_text(text)
         signal_codes = {
-            signal["code"]
+            signal.code
             for seg in report.suspected_segments
             for signal in seg.signals
         }
@@ -232,7 +232,7 @@ class TestStatisticsAccuracy:
         text = "为了把这些问题落下来，我写了一个任务管理的 Demo，把这套技术栈走了一遍。"
         report = analyze_text(text)
         signal_codes = {
-            signal["code"]
+            signal.code
             for seg in report.suspected_segments
             for signal in seg.signals
         }
@@ -250,7 +250,7 @@ app.get('/tasks', (req, res) => {
 """
         report = analyze_text(text)
         signal_codes = {
-            signal["code"]
+            signal.code
             for seg in report.suspected_segments
             for signal in seg.signals
         }
@@ -267,7 +267,7 @@ class TestReviewSignalMapping:
     def test_argument_signal_has_review_mapping(self):
         report = analyze_text("真正重要的不是速度，而是你是否能长期坚持。")
         review_signals = {
-            signal["review_signal"]
+            signal.review_signal
             for seg in report.suspected_segments
             for signal in seg.signals
         }
@@ -279,11 +279,11 @@ class TestReviewSignalMapping:
             signal
             for seg in report.suspected_segments
             for signal in seg.signals
-            if signal["code"] == "zh.fit.future_outlook_heading"
+            if signal.code == "zh.fit.future_outlook_heading"
         ]
         assert collected
-        assert "author_fit_low" in collected[0]["review_signals"]
-        assert "forced_summary" in collected[0]["review_signals"]
+        assert "author_fit_low" in collected[0].review_signals
+        assert "forced_summary" in collected[0].review_signals
 
 
 class TestPerplexityDetection:

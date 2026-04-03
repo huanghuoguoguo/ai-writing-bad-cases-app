@@ -56,7 +56,12 @@ def split_paragraphs(text: str) -> list[str]:
 
 
 def split_sentences(text: str) -> list[str]:
-    """按中文/英文句子边界分句"""
+    """
+    按中文/英文句子边界分句，对 Markdown 特殊块保持完整。
+
+    注意：此函数会跳过代码块、标题、表格等特殊块，适合检测流程使用。
+    统计分析请用 split_sentences_for_stats()，它按标点直接分割。
+    """
     text = text.strip()
     if not text:
         return []
@@ -67,6 +72,17 @@ def split_sentences(text: str) -> list[str]:
 
     sentences = [chunk.strip() for chunk in _SENTENCE_SPLIT_RE.findall(text) if chunk.strip()]
     return sentences or [text]
+
+
+def split_sentences_for_stats(text: str) -> list[str]:
+    """
+    统计用分句 - 按标点直接分割，不处理 Markdown 特殊块。
+
+    与 split_sentences() 的区别：
+    - split_sentences(): 检测流程用，跳过代码块/标题等
+    - split_sentences_for_stats(): 统计分析用，直接按标点分割所有文本
+    """
+    return [s.strip() for s in _STAT_SENTENCE_SPLIT_RE.split(text) if s.strip()]
 
 
 def paragraph_spans(text: str) -> list[tuple[int, int]]:
